@@ -17,3 +17,4 @@ if __name__ == "__main__":
 #analysis and matches tabs not loading data
 #make competition optional
 #choosing from matches tab shoud fill out the calculator
+#keep all changes in Github
