@@ -7,6 +7,7 @@ import webbrowser
 from tkinter import ttk, messagebox, filedialog
 
 import pandas as pd
+import self
 
 from src.config.constants import DEFAULT_PASSENGERS
 from src.data.team_data import get_team_airport, get_airport_coordinates
@@ -63,23 +64,37 @@ class MainWindow(tk.Tk):
         self._load_initial_data()
 
     def _load_initial_data(self):
+
         """Load initial data from CSV file."""
+
         try:
+
             # Try to load from settings first
+
             if os.path.exists(self.settings_file):
+
                 with open(self.settings_file, 'r') as f:
+
                     settings = json.load(f)
+
                     last_csv = settings.get('last_csv')
+
                     if last_csv and os.path.exists(last_csv):
                         self.file_path_var.set(last_csv)
+
                         self.load_matches_data()
+
                         return
 
             # If no settings or file doesn't exist, try default file
+
             if os.path.exists('cleaned_matches.csv'):
                 self.file_path_var.set('cleaned_matches.csv')
+
                 self.load_matches_data()
+
         except Exception as e:
+
             print(f"Error loading initial data: {e}")
 
     def create_analysis_tab(self):
@@ -155,6 +170,101 @@ class MainWindow(tk.Tk):
         matches_x_scroll.pack(side='bottom', fill='x')
         matches_y_scroll.pack(side='right', fill='y')
         self.matches_tree.pack(side='left', fill='both', expand=True)
+
+    def load_matches_data(self):
+
+        """Load matches data from CSV file."""
+
+        try:
+
+            file_path = self.file_path_var.get()
+
+            if not file_path:
+                self.matches_status.config(
+
+                    text="No file selected",
+
+                    foreground='red'
+
+                )
+
+                return
+
+            # Read CSV file
+
+            data = pd.read_csv(file_path)
+
+            # Ensure required columns exist
+
+            required_columns = ['Date', 'Home Team', 'Away Team', 'Competition']
+
+            if not all(col in data.columns for col in required_columns):
+                raise ValueError("CSV file missing required columns")
+
+            # Convert date format
+
+            data['Date'] = pd.to_datetime(data['Date']).dt.strftime('%Y-%m-%d')
+
+            # Store data
+
+            self.original_matches_data = data.copy()
+
+            self.matches_data = data.copy()
+
+            self.filtered_matches_data = data.copy()
+
+            # Clear existing items
+
+            for item in self.matches_tree.get_children():
+                self.matches_tree.delete(item)
+
+            # Add data to treeview
+
+            for idx, row in data.iterrows():
+                values = (
+
+                    row['Date'],
+
+                    row['Home Team'],
+
+                    row['Away Team'],
+
+                    row['Competition']
+
+                )
+
+                tags = ('evenrow',) if idx % 2 == 0 else ('oddrow',)
+
+                self.matches_tree.insert('', 'end', values=values, tags=tags)
+
+            # Configure row colors
+
+            self.matches_tree.tag_configure('evenrow', background='#f0f0f0')
+
+            self.matches_tree.tag_configure('oddrow', background='#ffffff')
+
+            # Update status
+
+            self.matches_status.config(
+
+                text=f"Successfully loaded {len(data)} matches",
+
+                foreground='green'
+
+            )
+
+
+        except Exception as e:
+
+            self.matches_status.config(
+
+                text=f"Error loading matches: {str(e)}",
+
+                foreground='red'
+
+            )
+
+            messagebox.showerror("Error", f"Failed to load matches: {str(e)}")
 
     def update_analysis_display(self):
         """Update analysis tab displays with current data."""
@@ -365,7 +475,7 @@ class MainWindow(tk.Tk):
         self.calculator_tab.rowconfigure(0, weight=1)
 
     def _init_matches_tab(self):
-        """Initialize matches tab content with summary view"""
+        """Initialize matches tab content."""
         # Main container for matches tab
         matches_container = ttk.Frame(self.matches_tab)
         matches_container.pack(fill='both', expand=True)
@@ -388,59 +498,28 @@ class MainWindow(tk.Tk):
         self.competition_filter_entry = CompetitionAutoComplete(comp_filter_frame)
         self.competition_filter_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
-        # Apply Filter Button
-        apply_filter_button = ttk.Button(filter_frame, text="Apply Filter", command=self.filter_matches)
-        apply_filter_button.pack(side=tk.RIGHT, padx=5)
+        # Filter buttons
+        button_frame = ttk.Frame(filter_frame)
+        button_frame.pack(side=tk.RIGHT, padx=5)
 
-        # Summary Frame
-        summary_frame = ttk.LabelFrame(matches_container, text="Summary", padding="10")
-        summary_frame.pack(pady=10, padx=20, fill=tk.X)
+        apply_filter_button = ttk.Button(button_frame, text="Apply Filter", command=self.filter_matches)
+        apply_filter_button.pack(side=tk.LEFT, padx=5)
 
-        # Create summary treeview with increased height
-        self.summary_tree = ttk.Treeview(
-            summary_frame,
-            columns=("Metric", "Value", "Emissions", "Average"),
-            show='headings',
-            height=6  # Increased height to show more rows
-        )
-
-        # Configure summary columns
-        self.summary_tree.heading("Metric", text="Competition")
-        self.summary_tree.heading("Value", text="# of Matches")
-        self.summary_tree.heading("Emissions", text="Total Emissions (tCO₂)")
-        self.summary_tree.heading("Average", text="Avg Emissions/Match")
-
-        # Configure column widths and anchors for better readability
-        self.summary_tree.column("Metric", width=200, anchor='center')  # Left-align text, wider column
-        self.summary_tree.column("Value", width=120, anchor='center')
-        self.summary_tree.column("Emissions", width=180, anchor='center')
-        self.summary_tree.column("Average", width=180, anchor='center')
-
-        # Style the summary tree
-        style = ttk.Style()
-        style.configure("Treeview", rowheight=25)  # Increase row height
-        style.configure("Treeview.Heading", font=('Segoe UI', 9, 'bold'))  # Bold headers
-
-        self.summary_tree.pack(fill=tk.X, pady=5)
+        reset_filter_button = ttk.Button(button_frame, text="Reset", command=self.reset_filters)
+        reset_filter_button.pack(side=tk.LEFT, padx=5)
 
         # Matches Display Frame
         matches_display_frame = ttk.LabelFrame(matches_container, text="Matches", padding="10")
         matches_display_frame.pack(pady=10, padx=20, fill='both', expand=True)
 
-        # Create matches display widget
-        self.matches_display = ttk.Frame(matches_display_frame)
-        self.matches_display.pack(fill='both', expand=True)
-
         # Configure and create matches treeview
         columns = ("Date", "Home Team", "Away Team", "Competition")
         self.matches_tree = ttk.Treeview(
-            self.matches_display,
+            matches_display_frame,
             columns=columns,
             show='headings',
             height=20
         )
-        self.matches_tree.bind("<Double-1>", self.calculate_emissions_from_selection)
-        self.matches_tree.bind("<Return>", self.calculate_emissions_from_selection)
 
         # Configure columns
         for col in columns:
@@ -453,16 +532,26 @@ class MainWindow(tk.Tk):
                 self.matches_tree.column(col, width=150, stretch=True)
 
         # Add scrollbars
-        y_scrollbar = ttk.Scrollbar(self.matches_display, orient="vertical", command=self.matches_tree.yview)
-        x_scrollbar = ttk.Scrollbar(self.matches_display, orient="horizontal", command=self.matches_tree.xview)
+        y_scrollbar = ttk.Scrollbar(matches_display_frame, orient="vertical", command=self.matches_tree.yview)
+        x_scrollbar = ttk.Scrollbar(matches_display_frame, orient="horizontal", command=self.matches_tree.xview)
 
         self.matches_tree.configure(yscrollcommand=y_scrollbar.set, xscrollcommand=x_scrollbar.set)
 
-        # Pack elements
+        # Pack scrollbars and treeview
         y_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         x_scrollbar.pack(side=tk.BOTTOM, fill=tk.X)
         self.matches_tree.pack(fill='both', expand=True)
 
+        # Add status label
+        self.matches_status = ttk.Label(matches_container, text="")
+        self.matches_status.pack(pady=5)
+
+        # Bind events
+        self.matches_tree.bind("<Double-1>", self.calculate_emissions_from_selection)
+        self.matches_tree.bind("<Return>", self.calculate_emissions_from_selection)
+
+        # Create context menu
+        self.create_context_menu()
     def create_context_menu(self):
         """Create right-click context menu for the matches tree"""
         self.context_menu = tk.Menu(self, tearoff=0)
@@ -591,8 +680,45 @@ class MainWindow(tk.Tk):
                 foreground='red'
             )
 
-            print(f"Loaded data shape: {data.shape}")
-            print(f"First few rows:\n{data.head()}")
+    def update_matches_display(self, data=None):
+        """Update matches display with filtered data"""
+        print("Updating matches display")
+
+        # Clear existing items
+        for item in self.matches_tree.get_children():
+            self.matches_tree.delete(item)
+
+        if data is not None and not data.empty:
+            print(f"Adding {len(data)} matches to display")
+
+            # Add data to treeview
+            for idx, row in data.iterrows():
+                try:
+                    # Format date properly
+                    date_str = row['Date'].strftime('%Y-%m-%d') if isinstance(row['Date'], pd.Timestamp) else \
+                    row['Date']
+
+                    # Insert match data
+                    values = (
+                        date_str,
+                        row['Home Team'],
+                        row['Away Team'],
+                        row['Competition']
+                    )
+                    print(f"Inserting match: {values}")
+
+                    # Insert with alternating colors
+                    tags = ('evenrow',) if idx % 2 == 0 else ('oddrow',)
+                    self.matches_tree.insert('', 'end', values=values, tags=tags)
+
+                except Exception as e:
+                    print(f"Error inserting match {idx}: {str(e)}")
+                    continue
+
+            # Configure row colors
+            self.matches_tree.tag_configure('evenrow', background='#f0f0f0')
+            self.matches_tree.tag_configure('oddrow', background='#ffffff')
+
     def filter_matches(self):
         """Filter matches based on selected criteria"""
         if self.matches_data is None:
@@ -626,44 +752,6 @@ class MainWindow(tk.Tk):
             self.filtered_matches_data = self.matches_data.copy()
             self.update_matches_display(self.matches_data)
 
-    def update_matches_display(self, data=None):
-        """Update matches display with filtered data"""
-        print("Updating matches display")
-
-        # Clear existing items
-        for item in self.matches_tree.get_children():
-            self.matches_tree.delete(item)
-
-        if data is not None and not data.empty:
-            print(f"Adding {len(data)} matches to display")
-
-            # Add data to treeview
-            for idx, row in data.iterrows():
-                try:
-                    # Format date properly
-                    date_str = row['Date'].strftime('%Y-%m-%d') if isinstance(row['Date'], pd.Timestamp) else row[
-                        'Date']
-
-                    # Insert match data
-                    values = (
-                        date_str,
-                        row['Home Team'],
-                        row['Away Team'],
-                        row['Competition']
-                    )
-                    print(f"Inserting match: {values}")
-
-                    # Insert with alternating colors
-                    tags = ('evenrow',) if idx % 2 == 0 else ('oddrow',)
-                    self.matches_tree.insert('', 'end', values=values, tags=tags)
-
-                except Exception as e:
-                    print(f"Error inserting match {idx}: {str(e)}")
-                    continue
-
-            # Also update the analysis tab if it exists
-            if hasattr(self, 'update_analysis_display'):
-                self.update_analysis_display()
     def calculate(self):
         """Calculate emissions based on input."""
         try:
