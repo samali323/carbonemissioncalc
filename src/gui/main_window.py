@@ -6,6 +6,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 
 import pandas as pd
+import self
 
 from src.config.constants import DEFAULT_PASSENGERS
 from src.data.team_data import get_team_airport, get_airport_coordinates
@@ -64,10 +65,6 @@ class MainWindow(tk.Tk):
         team_frame = ttk.LabelFrame(left_frame, text="Match Details", padding="10")
         team_frame.pack(fill='x', pady=(0, 10))
 
-        # Competition
-        ttk.Label(team_frame, text="Competition:").pack(anchor=tk.W)
-        self.competition_entry = CompetitionAutoComplete(team_frame, width=50)
-        self.competition_entry.pack(fill='x', pady=(0, 10))
 
         # Home Team
         ttk.Label(team_frame, text="Home Team:").pack(anchor=tk.W)
@@ -230,6 +227,9 @@ class MainWindow(tk.Tk):
         y_scroll.pack(side='right', fill='y')
         self.matches_tree.pack(fill='both', expand=True)
 
+        # Add bindings for match selection
+        self.add_match_selection_bindings()
+
     def sort_treeview(self, tree, col, reverse):
         """Sort treeview contents by column"""
         data = []
@@ -293,6 +293,32 @@ class MainWindow(tk.Tk):
             for item in self.hidden_items:
                 self.matches_tree.move(item, '', 'end')
             self.hidden_items = []
+
+    def add_match_selection_bindings(self):
+        """Add bindings for match selection"""
+        self.matches_tree.bind("<Double-1>", self.select_match)
+        self.matches_tree.bind("<Return>", self.select_match)
+
+    def select_match(self, event):
+        """Handle match selection from analysis tab"""
+        selection = self.matches_tree.selection()
+        if not selection:
+            return
+
+        # Get match details
+        values = self.matches_tree.item(selection[0])['values']
+
+        # Update calculator entries
+        self.home_team_entry.set_text(values[0])  # Use set_text() for TeamAutoComplete
+        self.away_team_entry.set_text(values[1])
+        self.round_trip_var.set(True)
+
+        # Calculate emissions
+        self.calculate()
+
+        # Switch to calculator tab
+        self.notebook.select(self.calculator_tab)
+
 
     def create_settings_tab(self):
         # Load data frame
