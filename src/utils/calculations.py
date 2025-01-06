@@ -41,34 +41,24 @@ def calculate_transport_emissions(
 ) -> float:
     """
     Calculate emissions for different transport modes.
-
-    Args:
-        mode: Transport mode ('air', 'rail', or 'bus')
-        distance_km: Distance in kilometers
-        passengers: Number of passengers
-
-    Returns:
-        Emissions in metric tons of CO2
     """
     if mode == 'air':
-        # Calculate flight time in hours (assume average speed of 800 km/h)
+        # Air calculations remain the same as they use direct distance
         avg_speed = 800  # km/h
         flight_time = distance_km / avg_speed
-
-        # Calculate emissions using 250kg per passenger per hour
         emissions_per_passenger = 250 * flight_time  # kg CO2
-        total_emissions = (emissions_per_passenger * passengers) / 1000  # Convert to metric tons
-
+        total_emissions = (emissions_per_passenger * passengers) / 1000
         return total_emissions
 
     elif mode in ['rail', 'bus']:
-        # Get emissions factor for mode
-        emissions_per_passenger_km = TRANSPORT_MODES[mode]['co2_per_km']
-        return (distance_km * emissions_per_passenger_km * passengers) / 1000
+        # Apply distance multiplier for ground transport
+        mode_config = TRANSPORT_MODES[mode]
+        adjusted_distance = distance_km * mode_config['distance_multiplier']
+        emissions_per_passenger_km = mode_config['co2_per_km']
+        return (adjusted_distance * emissions_per_passenger_km * passengers) / 1000
 
     else:
         raise ValueError(f"Unknown transport mode: {mode}")
-
 
 def calculate_journey_time(
         mode: str,

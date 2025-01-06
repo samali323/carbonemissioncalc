@@ -5,26 +5,50 @@ KM_PER_MILE = 1.60934
 
 # Transport mode characteristics
 TRANSPORT_MODES = {
-    'air': {
-        'mode': 'air',
-        'co2_per_km': 0.0,  # Calculated differently for air
-        'speed': 800,       # km/h
-        'cost_per_km': 0.50 # USD per passenger-km
-    },
-    'rail': {
-        'mode': 'rail',
-        'co2_per_km': 0.041,  # Modern electric train
-        'speed': 200,         # Average high-speed rail
-        'cost_per_km': 0.18
-    },
-    'bus': {
-        'mode': 'bus',
-        'co2_per_km': 0.027,  # Modern coach bus
-        'speed': 80,          # Average coach speed
-        'cost_per_km': 0.12
-    }
-}
 
+    'air': {
+
+        'mode': 'air',
+
+        'co2_per_km': 0.0,  # Calculated differently for air
+
+        'speed': 800,       # km/h
+
+        'cost_per_km': 0.50, # USD per passenger-km
+
+        'distance_multiplier': 1.0  # Direct route
+
+    },
+
+    'rail': {
+
+        'mode': 'rail',
+
+        'co2_per_km': 0.041,  # Modern electric train
+
+        'speed': 200,         # Average high-speed rail
+
+        'cost_per_km': 0.18,
+
+        'distance_multiplier': 1.2  # 20% longer than air route
+
+    },
+
+    'bus': {
+
+        'mode': 'bus',
+
+        'co2_per_km': 0.027,  # Modern coach bus
+
+        'speed': 80,          # Average coach speed
+
+        'cost_per_km': 0.12,
+
+        'distance_multiplier': 1.4  # 40% longer than air route
+
+    }
+
+}
 # Emission factors for different flight types
 EMISSION_FACTORS = {
     'LongBusiness': 0.163 / 1.60934,    # Convert to kg CO2 per passenger-km

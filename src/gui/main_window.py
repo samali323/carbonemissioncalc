@@ -5,14 +5,15 @@ import os
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 
+
 import pandas as pd
 import self
 
-from src.config.constants import DEFAULT_PASSENGERS
+from src.config.constants import DEFAULT_PASSENGERS, EMISSION_FACTORS, TRANSPORT_MODES
 from src.data.team_data import get_team_airport, get_airport_coordinates
 from src.gui.widgets.auto_complete import TeamAutoComplete, CompetitionAutoComplete
 from src.models.emissions import EmissionsCalculator
-from src.utils.calculations import calculate_transport_emissions, calculate_journey_time
+from src.utils.calculations import calculate_transport_emissions, calculate_journey_time, determine_mileage_type
 
 
 class MainWindow(tk.Tk):
@@ -65,7 +66,6 @@ class MainWindow(tk.Tk):
         # Match details frame
         team_frame = ttk.LabelFrame(left_frame, text="Match Details", padding="10")
         team_frame.pack(fill='x', pady=(0, 10))
-
 
         # Home Team
         ttk.Label(team_frame, text="Home Team:").pack(anchor=tk.W)
@@ -133,31 +133,57 @@ class MainWindow(tk.Tk):
         # Configure grid weights
         self.calculator_tab.columnconfigure(1, weight=1)
         self.calculator_tab.rowconfigure(0, weight=1)
+        self.add_transport_comparison()
 
     def add_transport_comparison(self):
+
         """Add transport alternatives table to calculator tab"""
+
         # Create frame for transport comparison
+
         transport_frame = ttk.LabelFrame(self.calculator_tab, text="Transport Alternatives", padding="10")
+
         transport_frame.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E), padx=10, pady=10)
 
-        # Create treeview for transport options
+        # Create treeview with all needed columns
+
         self.transport_tree = ttk.Treeview(
+
             transport_frame,
-            columns=("Mode", "Duration", "Distance", "CO2", "Cost"),
+
+            columns=("Mode", "Duration", "Distance", "CO2", "CO2 Saved", "Route", "Route Factor"),
+
             show='headings',
+
             height=3
+
         )
+
         # Configure columns
+
         columns = {
-            "Mode": 100,
-            "Duration": 100,
-            "Distance": 100,
-            "CO2": 100,
-            "Cost": 100
+
+            "Mode": ("Transport Mode", 100),
+
+            "Duration": ("Journey Time", 100),
+
+            "Distance": ("Distance (km)", 100),
+
+            "CO2": ("CO2 (tons)", 100),
+
+            "CO2 Saved": ("CO2 Saved (tons)", 120),
+
+            "Route": ("Route Description", 200),
+
+            "Route Factor": ("Route Factor", 100)
+
         }
 
-        for col, width in columns.items():
-            self.transport_tree.heading(col, text=col, anchor='center')
+        # Set column headings and widths
+
+        for col, (heading, width) in columns.items():
+            self.transport_tree.heading(col, text=heading, anchor='center')
+
             self.transport_tree.column(col, width=width, anchor='center')
 
         self.transport_tree.pack(fill='x', expand=True)
@@ -168,26 +194,41 @@ class MainWindow(tk.Tk):
         for item in self.transport_tree.get_children():
             self.transport_tree.delete(item)
 
-        # Get alternative transport calculations
+        # Get base distance and calculate route factors
         base_distance = result.distance_km
+        air_route_factor = self._calculate_air_route_factor(base_distance)
+        rail_route_factor = self._calculate_rail_route_factor(base_distance)
+        bus_route_factor = self._calculate_bus_route_factor(base_distance)
+
+        # Calculate for each transport mode
         transport_modes = {
             'Air': {
                 'duration': calculate_journey_time('air', base_distance, self.round_trip_var.get()),
                 'distance': base_distance,
                 'co2': result.total_emissions,
-                'cost': base_distance * 0.50  # Example cost per km
+                'co2_saved': 0,  # Reference mode
+                'route': "Direct Flight",
+                'route_factor': air_route_factor
             },
             'Rail': {
-                'duration': calculate_journey_time('rail', base_distance * 1.2, self.round_trip_var.get()),
-                'distance': base_distance * 1.2,
-                'co2': calculate_transport_emissions('rail', base_distance * 1.2),
-                'cost': base_distance * 1.2 * 0.18
+                'duration': calculate_journey_time('rail',
+                                                   base_distance * TRANSPORT_MODES['rail']['distance_multiplier'],
+                                                   self.round_trip_var.get()),
+                'distance': base_distance * TRANSPORT_MODES['rail']['distance_multiplier'],
+                'co2': calculate_transport_emissions('rail', base_distance),
+                'co2_saved': result.total_emissions - calculate_transport_emissions('rail', base_distance),
+                'route': "Via Rail Network",
+                'route_factor': rail_route_factor
             },
             'Bus': {
-                'duration': calculate_journey_time('bus', base_distance * 1.4, self.round_trip_var.get()),
-                'distance': base_distance * 1.4,
-                'co2': calculate_transport_emissions('bus', base_distance * 1.4),
-                'cost': base_distance * 1.4 * 0.12
+                'duration': calculate_journey_time('bus',
+                                                   base_distance * TRANSPORT_MODES['bus']['distance_multiplier'],
+                                                   self.round_trip_var.get()),
+                'distance': base_distance * TRANSPORT_MODES['bus']['distance_multiplier'],
+                'co2': calculate_transport_emissions('bus', base_distance),
+                'co2_saved': result.total_emissions - calculate_transport_emissions('bus', base_distance),
+                'route': "Via Road Network",
+                'route_factor': bus_route_factor
             }
         }
 
@@ -198,9 +239,59 @@ class MainWindow(tk.Tk):
                 data['duration'],
                 f"{data['distance']:,.1f} km",
                 f"{data['co2']:.2f} tons",
-                f"£{data['cost']:,.2f}"
+                f"{data['co2_saved']:.2f} tons",
+                data['route'],
+                f"{data['route_factor']:.3f}"
             ))
+    def _calculate_air_route_factor(self, distance_km: float) -> float:
 
+        """Calculate route factor for air travel"""
+
+        flight_type = determine_mileage_type(distance_km)
+
+        # Use emission factors from constants
+
+        if flight_type == "Short":
+
+            return EMISSION_FACTORS['ShortBusiness']
+
+        elif flight_type == "Medium":
+
+            return EMISSION_FACTORS['MediumBusiness']
+
+        else:
+
+            return EMISSION_FACTORS['LongBusiness']
+
+    def _calculate_rail_route_factor(self, distance_km: float) -> float:
+        """
+        Calculate route factor for rail travel.
+
+        Args:
+            distance_km: Distance in kilometers
+
+        Returns:
+            float: CO2 emissions factor in kg CO2 per passenger-km
+        """
+        # Get rail emission factor from TRANSPORT_MODES constant
+        # Modern electric train: 0.041 kg CO2 per passenger-km
+        return TRANSPORT_MODES['rail']['co2_per_km']
+
+    def _calculate_bus_route_factor(self, distance_km: float) -> float:
+        """
+        Calculate route factor for bus travel.
+
+        Args:
+            distance_km: Distance in kilometers
+
+        Returns:
+            float: CO2 emissions factor in kg CO2 per passenger-km
+        """
+        # Get bus emission factor from TRANSPORT_MODES constant
+        # Modern coach bus: 0.027 kg CO2 per passenger-km
+        return TRANSPORT_MODES['bus']['co2_per_km']
+
+        return TRANSPORT_MODES['bus']['co2_per_km']
     def create_analysis_tab(self):
         """Create enhanced analysis tab with sorting and filtering"""
         analysis_container = ttk.Frame(self.analysis_tab, padding="10")
@@ -381,11 +472,59 @@ class MainWindow(tk.Tk):
         self.away_team_entry.set_text(values[1])
         self.round_trip_var.set(True)
 
-        # Calculate emissions
-        self.calculate()
+        # Calculate emissions and update transport comparison
+        try:
+            # Get inputs
+            home_team = values[0]
+            away_team = values[1]
+            passengers = int(self.passengers_entry.get())
+            is_round_trip = self.round_trip_var.get()
 
-        # Switch to calculator tab
-        self.notebook.select(self.calculator_tab)
+            # Get airports and coordinates
+            home_airport = get_team_airport(home_team)
+            away_airport = get_team_airport(away_team)
+
+            if not home_airport or not away_airport:
+                raise ValueError("Airport not found for one or both teams")
+
+            home_coords = get_airport_coordinates(home_airport)
+            away_coords = get_airport_coordinates(away_airport)
+
+            if not home_coords or not away_coords:
+                raise ValueError("Coordinates not found for one or both airports")
+
+            # Calculate emissions
+            result = self.calculator.calculate_flight_emissions(
+                home_coords['lat'], home_coords['lon'],
+                away_coords['lat'], away_coords['lon'],
+                passengers=passengers,
+                is_round_trip=is_round_trip
+            )
+
+            # Display results
+            self.display_results(result, home_team, away_team)
+
+            # Update transport comparison table
+            flight_time = calculate_journey_time('air', result.distance_km, is_round_trip)
+            rail_distance = result.distance_km * 1.2  # Assuming 20% longer route for rail
+            bus_distance = result.distance_km * 1.4  # Assuming 40% longer route for bus
+
+            rail_time = calculate_journey_time('rail', rail_distance, is_round_trip)
+            bus_time = calculate_journey_time('bus', bus_distance, is_round_trip)
+
+            # Calculate emissions for alternative modes
+            rail_emissions = calculate_transport_emissions('rail', rail_distance, passengers)
+            bus_emissions = calculate_transport_emissions('bus', bus_distance, passengers)
+
+            # Update transport comparison table
+            self.update_transport_comparison(result)
+            self.export_button.config(state='normal')
+
+            # Switch to calculator tab
+            self.notebook.select(self.calculator_tab)
+
+        except Exception as e:
+            messagebox.showerror("Error", f"An error occurred: {str(e)}")
 
 
     def create_settings_tab(self):
