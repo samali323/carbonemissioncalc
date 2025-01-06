@@ -12,6 +12,7 @@ from src.config.constants import DEFAULT_PASSENGERS
 from src.data.team_data import get_team_airport, get_airport_coordinates
 from src.gui.widgets.auto_complete import TeamAutoComplete, CompetitionAutoComplete
 from src.models.emissions import EmissionsCalculator
+from src.utils.calculations import calculate_transport_emissions, calculate_journey_time
 
 
 class MainWindow(tk.Tk):
@@ -132,6 +133,73 @@ class MainWindow(tk.Tk):
         # Configure grid weights
         self.calculator_tab.columnconfigure(1, weight=1)
         self.calculator_tab.rowconfigure(0, weight=1)
+
+    def add_transport_comparison(self):
+        """Add transport alternatives table to calculator tab"""
+        # Create frame for transport comparison
+        transport_frame = ttk.LabelFrame(self.calculator_tab, text="Transport Alternatives", padding="10")
+        transport_frame.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E), padx=10, pady=10)
+
+        # Create treeview for transport options
+        self.transport_tree = ttk.Treeview(
+            transport_frame,
+            columns=("Mode", "Duration", "Distance", "CO2", "Cost"),
+            show='headings',
+            height=3
+        )
+        # Configure columns
+        columns = {
+            "Mode": 100,
+            "Duration": 100,
+            "Distance": 100,
+            "CO2": 100,
+            "Cost": 100
+        }
+
+        for col, width in columns.items():
+            self.transport_tree.heading(col, text=col, anchor='center')
+            self.transport_tree.column(col, width=width, anchor='center')
+
+        self.transport_tree.pack(fill='x', expand=True)
+
+    def update_transport_comparison(self, result):
+        """Update transport comparison table with calculated values"""
+        # Clear existing entries
+        for item in self.transport_tree.get_children():
+            self.transport_tree.delete(item)
+
+        # Get alternative transport calculations
+        base_distance = result.distance_km
+        transport_modes = {
+            'Air': {
+                'duration': calculate_journey_time('air', base_distance, self.round_trip_var.get()),
+                'distance': base_distance,
+                'co2': result.total_emissions,
+                'cost': base_distance * 0.50  # Example cost per km
+            },
+            'Rail': {
+                'duration': calculate_journey_time('rail', base_distance * 1.2, self.round_trip_var.get()),
+                'distance': base_distance * 1.2,
+                'co2': calculate_transport_emissions('rail', base_distance * 1.2),
+                'cost': base_distance * 1.2 * 0.18
+            },
+            'Bus': {
+                'duration': calculate_journey_time('bus', base_distance * 1.4, self.round_trip_var.get()),
+                'distance': base_distance * 1.4,
+                'co2': calculate_transport_emissions('bus', base_distance * 1.4),
+                'cost': base_distance * 1.4 * 0.12
+            }
+        }
+
+        # Add data to table
+        for mode, data in transport_modes.items():
+            self.transport_tree.insert('', 'end', values=(
+                mode,
+                data['duration'],
+                f"{data['distance']:,.1f} km",
+                f"{data['co2']:.2f} tons",
+                f"£{data['cost']:,.2f}"
+            ))
 
     def create_analysis_tab(self):
         """Create enhanced analysis tab with sorting and filtering"""
