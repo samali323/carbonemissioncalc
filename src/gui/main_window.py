@@ -9,7 +9,7 @@ from tkinter import ttk, messagebox, filedialog
 import pandas as pd
 import self
 
-from src.config.constants import DEFAULT_PASSENGERS, EMISSION_FACTORS, TRANSPORT_MODES
+from src.config.constants import DEFAULT_PASSENGERS, EMISSION_FACTORS, TRANSPORT_MODES, ALTERNATIVE_TRANSPORT_PREMIUM
 from src.data.team_data import get_team_airport, get_airport_coordinates
 from src.gui.widgets.auto_complete import TeamAutoComplete, CompetitionAutoComplete
 from src.models.emissions import EmissionsCalculator
@@ -58,6 +58,48 @@ class MainWindow(tk.Tk):
         self.settings_file = "settings.json"
         self._load_initial_data()
 
+        self.last_error = None  # Store the last error message
+        self.create_error_handling_widgets()
+
+        self.passengers_var = tk.StringVar(value=str(DEFAULT_PASSENGERS))
+
+        self.passengers_entry.config(textvariable=self.passengers_var)
+
+        self.passengers_var.trace_add('write', self.on_passengers_change)
+
+    def create_error_handling_widgets(self):
+
+        """Create widgets for error handling"""
+
+        error_frame = ttk.Frame(self.calculator_tab)
+
+        error_frame.grid(row=2, column=0, columnspan=2, sticky='ew', padx=10, pady=5)
+
+        self.copy_error_button = ttk.Button(
+
+            error_frame,
+
+            text="Copy Last Error",
+
+            command=self.copy_error_to_clipboard,
+
+            state='disabled'
+
+        )
+
+        self.copy_error_button.pack(side='right', padx=5)
+
+    def copy_error_to_clipboard(self):
+
+        """Copy the last error message to clipboard"""
+
+        if self.last_error:
+            self.clipboard_clear()
+
+            self.clipboard_append(self.last_error)
+
+            messagebox.showinfo("Success", "Error message copied to clipboard")
+
     def create_calculator_tab(self):
         # Left input frame
         left_frame = ttk.Frame(self.calculator_tab, padding="10")
@@ -86,6 +128,7 @@ class MainWindow(tk.Tk):
         self.passengers_entry = ttk.Entry(settings_frame)
         self.passengers_entry.pack(fill='x', pady=(0, 10))
         self.passengers_entry.insert(0, str(DEFAULT_PASSENGERS))
+        self.passengers_entry.bind('<KeyRelease>', self.on_passengers_change)
 
         # Round trip checkbox
         self.round_trip_var = tk.BooleanVar()
@@ -194,41 +237,36 @@ class MainWindow(tk.Tk):
         for item in self.transport_tree.get_children():
             self.transport_tree.delete(item)
 
-        # Get base distance and calculate route factors
+        # Get base distance and passengers
         base_distance = result.distance_km
-        air_route_factor = self._calculate_air_route_factor(base_distance)
-        rail_route_factor = self._calculate_rail_route_factor(base_distance)
-        bus_route_factor = self._calculate_bus_route_factor(base_distance)
+        is_round_trip = self.round_trip_var.get()
+        passengers = int(self.passengers_entry.get())
 
         # Calculate for each transport mode
         transport_modes = {
             'Air': {
-                'duration': calculate_journey_time('air', base_distance, self.round_trip_var.get()),
-                'distance': base_distance,
+                'duration': calculate_journey_time('air', base_distance, is_round_trip),
+                'distance': base_distance,  # Base distance already includes round trip if selected
                 'co2': result.total_emissions,
                 'co2_saved': 0,  # Reference mode
                 'route': "Direct Flight",
-                'route_factor': air_route_factor
+                'route_factor': determine_mileage_type(base_distance)
             },
             'Rail': {
-                'duration': calculate_journey_time('rail',
-                                                   base_distance * TRANSPORT_MODES['rail']['distance_multiplier'],
-                                                   self.round_trip_var.get()),
+                'duration': calculate_journey_time('rail', base_distance, is_round_trip),
                 'distance': base_distance * TRANSPORT_MODES['rail']['distance_multiplier'],
-                'co2': calculate_transport_emissions('rail', base_distance),
-                'co2_saved': result.total_emissions - calculate_transport_emissions('rail', base_distance),
+                'co2': calculate_transport_emissions('rail', base_distance, passengers),
+                'co2_saved': result.total_emissions - calculate_transport_emissions('rail', base_distance, passengers),
                 'route': "Via Rail Network",
-                'route_factor': rail_route_factor
+                'route_factor': f"{TRANSPORT_MODES['rail']['distance_multiplier']}x"
             },
             'Bus': {
-                'duration': calculate_journey_time('bus',
-                                                   base_distance * TRANSPORT_MODES['bus']['distance_multiplier'],
-                                                   self.round_trip_var.get()),
+                'duration': calculate_journey_time('bus', base_distance, is_round_trip),
                 'distance': base_distance * TRANSPORT_MODES['bus']['distance_multiplier'],
-                'co2': calculate_transport_emissions('bus', base_distance),
-                'co2_saved': result.total_emissions - calculate_transport_emissions('bus', base_distance),
+                'co2': calculate_transport_emissions('bus', base_distance, passengers),
+                'co2_saved': result.total_emissions - calculate_transport_emissions('bus', base_distance, passengers),
                 'route': "Via Road Network",
-                'route_factor': bus_route_factor
+                'route_factor': f"{TRANSPORT_MODES['bus']['distance_multiplier']}x"
             }
         }
 
@@ -237,11 +275,11 @@ class MainWindow(tk.Tk):
             self.transport_tree.insert('', 'end', values=(
                 mode,
                 data['duration'],
-                f"{data['distance']:,.1f} km",
-                f"{data['co2']:.2f} tons",
-                f"{data['co2_saved']:.2f} tons",
+                f"{data['distance']:,.1f}",
+                f"{data['co2']:.2f}",
+                f"{data['co2_saved']:.2f}",
                 data['route'],
-                f"{data['route_factor']:.3f}"
+                data['route_factor']
             ))
     def _calculate_air_route_factor(self, distance_km: float) -> float:
 
@@ -707,8 +745,17 @@ class MainWindow(tk.Tk):
             raise
 
     def on_round_trip_toggle(self):
+
         """Recalculate emissions when round trip toggle changes"""
-        if self.home_team_entry.get() and self.away_team_entry.get():
+
+        if hasattr(self, 'latest_result'):
+            self.calculate()  # This will trigger update_transport_comparison
+
+    def on_passengers_change(self, *args):
+
+        """Recalculate emissions when passenger count changes"""
+
+        if hasattr(self, 'latest_result'):
             self.calculate()
 
     def calculate(self):
@@ -720,49 +767,121 @@ class MainWindow(tk.Tk):
             passengers = int(self.passengers_entry.get())
             is_round_trip = self.round_trip_var.get()
 
+            # Input validation
+            if not home_team or not away_team:
+                raise ValueError("Please enter both home and away teams")
+
             # Validate airports
             home_airport = get_team_airport(home_team)
             away_airport = get_team_airport(away_team)
 
-            if not home_airport or not away_airport:
-                raise ValueError("Airport not found for one or both teams")
+            if not home_airport:
+                raise ValueError(f"Airport not found for {home_team}")
+            if not away_airport:
+                raise ValueError(f"Airport not found for {away_team}")
 
             # Get coordinates
             home_coords = get_airport_coordinates(home_airport)
             away_coords = get_airport_coordinates(away_airport)
 
-            if not home_coords or not away_coords:
-                raise ValueError("Coordinates not found for one or both airports")
+            if not home_coords:
+                raise ValueError(f"Coordinates not found for {home_team}'s airport")
+            if not away_coords:
+                raise ValueError(f"Coordinates not found for {away_team}'s airport")
 
             # Calculate emissions
             result = self.calculator.calculate_flight_emissions(
+
                 home_coords['lat'], home_coords['lon'],
+
                 away_coords['lat'], away_coords['lon'],
+
                 passengers=passengers,
+
                 is_round_trip=is_round_trip
+
             )
 
+            # Store the latest result
+
+            self.latest_result = result
+
             # Display results
+
             self.display_results(result, home_team, away_team)
+
+            # Update transport comparison
+
+            self.update_transport_comparison(result)
+
             self.export_button.config(state='normal')
 
+
         except ValueError as e:
+
             messagebox.showerror("Input Error", str(e))
+
         except Exception as e:
+
             messagebox.showerror("Error", f"An error occurred: {str(e)}")
 
     def display_results(self, result, home_team, away_team):
         """Display calculation results in text widget"""
         self.result_text.delete('1.0', tk.END)
 
-        summary = (
-            f"Match: {home_team} vs {away_team}\n"
-            f"Distance: {result.distance_km:.2f} km\n"
-            f"Total Emissions: {result.total_emissions:.2f} metric tons CO2\n"
-            f"Per Passenger: {result.per_passenger:.2f} metric tons CO2\n"
-        )
+        try:
+            # Calculate financial metrics
+            financial_metrics = self.calculator.calculate_match_costs(
+                distance_km=result.distance_km,
+                emissions_mt=result.total_emissions,
+                is_international=True,
+                time_horizon_years=5
+            )
 
-        self.result_text.insert('1.0', summary)
+            if financial_metrics is None:
+                raise ValueError("Failed to calculate financial metrics")
+
+            # Basic journey information
+            journey_info = (
+                f"Match: {home_team} vs {away_team}\n"
+                f"Distance: {result.distance_km:,.2f} km\n"
+                f"Total Emissions: {result.total_emissions:.2f} metric tons CO2\n"
+                f"Per Passenger: {result.per_passenger:.2f} metric tons CO2\n\n"
+            )
+
+            # Financial metrics
+            financial_info = (
+                "Financial Impact:\n"
+                f"Carbon Cost: ${financial_metrics.carbon_cost:,.2f}\n"
+                f"Operational Cost: ${financial_metrics.operational_cost:,.2f}\n"
+                f"Total Impact: ${financial_metrics.total_impact:,.2f}\n"
+                f"Risk-Adjusted Total: ${financial_metrics.total_risk_adjusted:,.2f}\n\n"
+
+                "Risk Analysis:\n"
+                f"Risk Exposure: ${financial_metrics.risk_exposure:,.2f}\n"
+                f"Carbon Market Exposure: ${financial_metrics.carbon_market_exposure:,.2f}\n"
+                f"Carbon Price Sensitivity: ${financial_metrics.carbon_price_sensitivity:,.2f}\n\n"
+
+                "Efficiency Metrics:\n"
+                f"Carbon Intensity: {financial_metrics.carbon_intensity:.4f}\n"
+                f"Marginal Abatement Cost: ${financial_metrics.marginal_abatement_cost:,.2f}\n"
+                f"Cost per Passenger Mile: ${financial_metrics.cost_per_passenger_mile:.2f}\n\n"
+
+                "Long-term Impact:\n"
+                f"Social Cost of Carbon: ${financial_metrics.social_cost_carbon:,.2f}\n"
+                f"Regulatory Compliance Cost: ${financial_metrics.regulatory_compliance_cost:,.2f}\n"
+                f"Net Present Value: ${financial_metrics.net_present_value:,.2f}\n"
+                f"Emission Reduction ROI: {financial_metrics.emission_reduction_roi:.1%}\n"
+            )
+
+            # Combine all information
+            full_report = journey_info + financial_info
+            self.result_text.insert('1.0', full_report)
+
+        except Exception as e:
+            error_message = f"Error displaying results: {str(e)}"
+            self.result_text.delete('1.0', tk.END)
+            self.result_text.insert('1.0', error_message)
 
     def export_to_csv(self):
         """Export analysis results to CSV"""

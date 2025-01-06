@@ -3,6 +3,21 @@
 # Conversion factors
 KM_PER_MILE = 1.60934
 
+# Financial and economic parameters
+CARBON_PRICE = 15.0  # USD per metric ton CO2
+FUEL_COST = 2.89  # USD per gallon A-1 Jet Fuel
+PASSENGER_LOAD = 30  # Average team travel party
+RISK_RATE = 0.047  # Risk premium rate
+DISCOUNT_RATE = 0.10  # For NPV calculations
+CARBON_PRICE_VOLATILITY = 0.25  # Annual volatility
+SOCIAL_CARBON_COST = 51.0  # current Biden admin estimate
+SOCIAL_COST_MULTIPLIER = 3.0  # Social cost vs market price
+COMPLIANCE_COST_RATE = 0.15  # Compliance cost as % of carbon cost
+ALTERNATIVE_TRANSPORT_PREMIUM = 1.35  # Premium for alternative transport
+EFFICIENCY_INVESTMENT_PER_TON = 1000  # Investment needed per ton reduction
+EXPECTED_REDUCTION_RATE = 0.15  # Expected emission reduction rate
+ANNUAL_CARBON_PRICE_GROWTH = 0.05  # Annual carbon price growth rate
+
 # Transport mode characteristics
 TRANSPORT_MODES = {
 
