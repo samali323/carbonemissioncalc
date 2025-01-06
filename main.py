@@ -12,9 +12,10 @@ def main():
 if __name__ == "__main__":
     main()
 
-#team airport and team_airport_coordinates_implementation
-#settings save button
-#analysis and matches tabs not loading data
+
+#matches tabs not loading data
 #make competition optional
-#choosing from matches tab shoud fill out the calculator
-#keep all changes in Github
+#add other transport options
+#add economic equivalencies and other factors from before
+#choosing from matches tab should fill out the calculator
+#keep all changes in GitHub
