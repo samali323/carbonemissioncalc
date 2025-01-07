@@ -69,39 +69,6 @@ def calculate_transport_emissions(
 
     return total_emissions
 
-def calculate_journey_time(mode: str, distance_km: float, is_round_trip: bool = False) -> str:
-    """Calculate journey time based on mode and distance."""
-    # Get speed from transport modes config
-    speed = TRANSPORT_MODES[mode]['speed']
-
-    # Minimum distance check
-    if distance_km < 1:
-        return "N/A"  # or "0h 00m" depending on preference
-
-    # Calculate basic time in hours
-    time_hours = distance_km / speed
-
-    # Add mode-specific adjustments
-    if mode == 'air':
-        # Add 2 hours for airport procedures (1 hour each end)
-        time_hours += 2
-    elif mode == 'rail':
-        # Add 30 minutes for station procedures
-        time_hours += 0.5
-    elif mode == 'bus':
-        # Add rest stops (15 minutes per 2 hours)
-        rest_stops = (time_hours // 2) * 0.25
-        time_hours += rest_stops
-
-    # Double time for round trip
-    if is_round_trip:
-        time_hours *= 2
-
-    # Convert to hours and minutes
-    hours = int(time_hours)
-    minutes = int((time_hours - hours) * 60)
-
-    return f"{hours}h {minutes:02d}m"
 
 def calculate_equivalencies(emissions_mtco2: float) -> Dict[str, float]:
     """Calculate environmental equivalencies for given CO2 emissions."""

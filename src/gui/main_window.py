@@ -14,7 +14,7 @@ from src.config.constants import DEFAULT_PASSENGERS, EMISSION_FACTORS, TRANSPORT
 from src.data.team_data import get_team_airport, get_airport_coordinates
 from src.gui.widgets.auto_complete import TeamAutoComplete, CompetitionAutoComplete
 from src.models.emissions import EmissionsCalculator
-from src.utils.calculations import calculate_transport_emissions, calculate_journey_time, determine_mileage_type
+from src.utils.calculations import calculate_transport_emissions, determine_mileage_type
 
 
 class MainWindow(tk.Tk):
@@ -200,8 +200,6 @@ class MainWindow(tk.Tk):
 
             "Mode": ("Transport Mode", 100),
 
-            "Duration": ("Journey Time", 100),
-
             "Distance": ("Distance (km)", 100),  # Changed from miles to km
 
             "CO2": ("CO2 (tons)", 100),
@@ -229,7 +227,7 @@ class MainWindow(tk.Tk):
 
         self.result_text.insert(tk.END,
 
-                                f"{'Mode':20} {'Time':8} {'Distance (km)':15} {'CO2 (tons)':15} {'CO2 Saved':15}\n")
+                                f"{'Mode':20}  {'Distance (km)':15} {'CO2 (tons)':15} {'CO2 Saved':15}\n")
 
         self.result_text.insert(tk.END, "-" * 80 + "\n")
 
@@ -258,8 +256,6 @@ class MainWindow(tk.Tk):
             if mode != 'air':
                 distance *= TRANSPORT_MODES[mode]['distance_multiplier']
 
-            time = calculate_journey_time(mode, distance, self.round_trip_var.get())
-
             emissions = calculate_transport_emissions(
 
                 mode,
@@ -280,7 +276,7 @@ class MainWindow(tk.Tk):
 
             self.result_text.insert(tk.END,
 
-                                    f"{mode:20} {time:<8} {distance:15.1f} {emissions:15.2f} {co2_saved_str:>15}\n")
+                                    f"{mode:20} {distance:15.1f} {emissions:15.2f} {co2_saved_str:>15}\n")
 
         self.result_text.insert(tk.END, "=" * 80 + "\n\n")
 
@@ -291,36 +287,6 @@ class MainWindow(tk.Tk):
         self.result_text.insert(tk.END,
                                 f"Bus: Southern European Bus Network (Distance factor: {TRANSPORT_MODES['bus']['distance_multiplier']:.2f})\n\n")
 
-    def display_alternative_impact(self, result):
-        self.result_text.insert(tk.END, "\nAlternative Transport Environmental Impact:\n")
-        self.result_text.insert(tk.END, "-" * 80 + "\n")
-
-        # Calculate air time first
-        air_time = calculate_journey_time('air', result.distance_km, self.round_trip_var.get())
-
-        # Calculate rail impact
-        rail_distance = result.distance_km * TRANSPORT_MODES['rail']['distance_multiplier']
-        rail_emissions = calculate_transport_emissions('rail', rail_distance, int(self.passengers_entry.get()))
-        rail_time = calculate_journey_time('rail', rail_distance, self.round_trip_var.get())
-        rail_time_diff = self.calculate_time_difference(air_time, rail_time)
-
-        self.result_text.insert(tk.END,
-                                f"Rail option would reduce emissions by {result.total_emissions - rail_emissions:.2f} tons "
-                                f"({((result.total_emissions - rail_emissions) / result.total_emissions) * 100:.1f}%) "
-                                f"and add {rail_time_diff}\n")
-
-        # Calculate bus impact
-        bus_distance = result.distance_km * TRANSPORT_MODES['bus']['distance_multiplier']
-        bus_emissions = calculate_transport_emissions('bus', bus_distance, int(self.passengers_entry.get()))
-        bus_time = calculate_journey_time('bus', bus_distance, self.round_trip_var.get())
-        bus_time_diff = self.calculate_time_difference(air_time, bus_time)
-
-        self.result_text.insert(tk.END,
-                                f"Bus option would reduce emissions by {result.total_emissions - bus_emissions:.2f} tons "
-                                f"({((result.total_emissions - bus_emissions) / result.total_emissions) * 100:.1f}%) "
-                                f"and add {bus_time_diff}\n")
-
-        self.result_text.insert(tk.END, "-" * 80 + "\n\n")
 
     def _calculate_air_route_factor(self, distance_km: float) -> float:
 
@@ -595,12 +561,9 @@ class MainWindow(tk.Tk):
             self.display_results(result, home_team, away_team)
 
             # Update transport comparison table
-            flight_time = calculate_journey_time('air', result.distance_km, is_round_trip)
             rail_distance = result.distance_km * 1.2  # Assuming 20% longer route for rail
             bus_distance = result.distance_km * 1.4  # Assuming 40% longer route for bus
 
-            rail_time = calculate_journey_time('rail', rail_distance, is_round_trip)
-            bus_time = calculate_journey_time('bus', bus_distance, is_round_trip)
 
             # Calculate emissions for alternative modes
             rail_emissions = calculate_transport_emissions('rail', rail_distance, passengers)
@@ -844,7 +807,9 @@ class MainWindow(tk.Tk):
 
         """Recalculate emissions when round trip toggle changes"""
 
-        if hasattr(self, 'latest_result'):
+        # Check if we have valid team entries instead of checking for latest_result
+
+        if self.home_team_entry.get() and self.away_team_entry.get():
             self.calculate()  # This will trigger update_transport_comparison
 
     def on_passengers_change(self, *args):
@@ -889,6 +854,8 @@ class MainWindow(tk.Tk):
                 is_round_trip=is_round_trip
             )
 
+            # Store as latest result
+            self.latest_result = result
             # Display results
             self.display_results(result, home_team, away_team)
             self.update_transport_comparison(result)
