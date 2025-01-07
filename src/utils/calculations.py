@@ -37,54 +37,59 @@ def determine_mileage_type(distance_km: float) -> str:
 def calculate_transport_emissions(
         mode: str,
         distance_km: float,
-        passengers: int = 30
+        passengers: int = 30,
+        is_round_trip: bool = False
 ) -> float:
-    """
-    Calculate emissions for different transport modes.
-    """
+    """Calculate emissions for different transport modes."""
+    # Return 0 if distance is 0
+    if distance_km == 0:
+        return 0.0
+
     if mode == 'air':
-        # Air calculations remain the same as they use direct distance
-        avg_speed = 800  # km/h
+        avg_speed = TRANSPORT_MODES[mode]['speed']
         flight_time = distance_km / avg_speed
         emissions_per_passenger = 250 * flight_time  # kg CO2
         total_emissions = (emissions_per_passenger * passengers) / 1000
-        return total_emissions
-
     elif mode in ['rail', 'bus']:
-        # Apply distance multiplier for ground transport
         mode_config = TRANSPORT_MODES[mode]
         adjusted_distance = distance_km * mode_config['distance_multiplier']
         emissions_per_passenger_km = mode_config['co2_per_km']
-        return (adjusted_distance * emissions_per_passenger_km * passengers) / 1000
-
+        total_emissions = (adjusted_distance * emissions_per_passenger_km * passengers) / 1000
     else:
         raise ValueError(f"Unknown transport mode: {mode}")
 
-def calculate_journey_time(
-        mode: str,
-        distance_km: float,
-        is_round_trip: bool = False
-) -> str:
-    """Calculate journey time based on distance in kilometers."""
-    transport_config = TRANSPORT_MODES[mode]
+    # Double emissions for round trip
+    if is_round_trip:
+        total_emissions *= 2
 
-    # Basic time calculation
-    time_hours = distance_km / transport_config['speed']
+    return total_emissions
+
+
+def calculate_journey_time(mode: str, distance_km: float, is_round_trip: bool = False) -> str:
+    """Calculate journey time based on mode and distance."""
+    # Get speed from transport modes config
+    speed = TRANSPORT_MODES[mode]['speed']
+
+    # Minimum distance check
+    if distance_km < 1:
+        return "N/A"  # or "0h 00m" depending on preference
+
+    # Calculate basic time in hours
+    time_hours = distance_km / speed
 
     # Add mode-specific adjustments
     if mode == 'air':
-        # Add time for takeoff, landing, boarding
-        time_hours += 2  # 2 hours for airport procedures
+        # Add 2 hours for airport procedures (1 hour each end)
+        time_hours += 2
     elif mode == 'rail':
-        # Add time for station stops
-        stops = max(1, int(distance_km / 200))  # One stop every 200km
-        time_hours += stops * 0.25  # 15 minutes per stop
+        # Add 30 minutes for station procedures
+        time_hours += 0.5
     elif mode == 'bus':
-        # Add time for rest stops and urban traffic
-        rest_stops = int(time_hours / 4)  # One 30-min rest stop every 4 hours
-        time_hours += rest_stops * 0.5
-        time_hours += 1  # Urban traffic buffer
+        # Add rest stops (15 minutes per 2 hours)
+        rest_stops = (time_hours // 2) * 0.25
+        time_hours += rest_stops
 
+    # Double time for round trip
     if is_round_trip:
         time_hours *= 2
 
@@ -92,8 +97,7 @@ def calculate_journey_time(
     hours = int(time_hours)
     minutes = int((time_hours - hours) * 60)
 
-    return f"{hours}h {minutes}m"
-
+    return f"{hours}h {minutes:02d}m"
 
 def calculate_equivalencies(emissions_mtco2: float) -> Dict[str, float]:
     """Calculate environmental equivalencies for given CO2 emissions."""

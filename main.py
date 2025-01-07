@@ -14,5 +14,4 @@ if __name__ == "__main__":
 
 
 
-#add other transport options
-#add economic equivalencies and other factors from before
+#add new results and ask if formulas are right

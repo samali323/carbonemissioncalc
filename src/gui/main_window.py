@@ -9,7 +9,8 @@ from tkinter import ttk, messagebox, filedialog
 import pandas as pd
 import self
 
-from src.config.constants import DEFAULT_PASSENGERS, EMISSION_FACTORS, TRANSPORT_MODES, ALTERNATIVE_TRANSPORT_PREMIUM
+from src.config.constants import DEFAULT_PASSENGERS, EMISSION_FACTORS, TRANSPORT_MODES, ALTERNATIVE_TRANSPORT_PREMIUM, \
+    KM_PER_MILE
 from src.data.team_data import get_team_airport, get_airport_coordinates
 from src.gui.widgets.auto_complete import TeamAutoComplete, CompetitionAutoComplete
 from src.models.emissions import EmissionsCalculator
@@ -176,19 +177,12 @@ class MainWindow(tk.Tk):
         # Configure grid weights
         self.calculator_tab.columnconfigure(1, weight=1)
         self.calculator_tab.rowconfigure(0, weight=1)
-        self.add_transport_comparison()
 
     def add_transport_comparison(self):
-
-        """Add transport alternatives table to calculator tab"""
-
-        # Create frame for transport comparison
 
         transport_frame = ttk.LabelFrame(self.calculator_tab, text="Transport Alternatives", padding="10")
 
         transport_frame.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E), padx=10, pady=10)
-
-        # Create treeview with all needed columns
 
         self.transport_tree = ttk.Treeview(
 
@@ -202,15 +196,13 @@ class MainWindow(tk.Tk):
 
         )
 
-        # Configure columns
-
         columns = {
 
             "Mode": ("Transport Mode", 100),
 
             "Duration": ("Journey Time", 100),
 
-            "Distance": ("Distance (km)", 100),
+            "Distance": ("Distance (km)", 100),  # Changed from miles to km
 
             "CO2": ("CO2 (tons)", 100),
 
@@ -222,8 +214,6 @@ class MainWindow(tk.Tk):
 
         }
 
-        # Set column headings and widths
-
         for col, (heading, width) in columns.items():
             self.transport_tree.heading(col, text=heading, anchor='center')
 
@@ -232,55 +222,116 @@ class MainWindow(tk.Tk):
         self.transport_tree.pack(fill='x', expand=True)
 
     def update_transport_comparison(self, result):
-        """Update transport comparison table with calculated values"""
-        # Clear existing entries
-        for item in self.transport_tree.get_children():
-            self.transport_tree.delete(item)
+        self.result_text.insert(tk.END, "\nTransport Mode Comparison:\n")
+        self.result_text.insert(tk.END, "=" * 80 + "\n")
+        self.result_text.insert(tk.END,
+                                f"{'Mode':20} {'Time':8} {'Distance (km)':15} {'CO2 (tons)':15} {'CO2 Saved':15}\n")
+        self.result_text.insert(tk.END, "-" * 80 + "\n")
 
-        # Get base distance and passengers
-        base_distance = result.distance_km
-        is_round_trip = self.round_trip_var.get()
-        passengers = int(self.passengers_entry.get())
+        # Calculate for each mode
+        modes = ['air', 'rail', 'bus']
+        for mode in modes:
+            distance = result.distance_km
+            if mode != 'air':
+                distance *= TRANSPORT_MODES[mode]['distance_multiplier']
 
-        # Calculate for each transport mode
-        transport_modes = {
-            'Air': {
-                'duration': calculate_journey_time('air', base_distance, is_round_trip),
-                'distance': base_distance,  # Base distance already includes round trip if selected
-                'co2': result.total_emissions,
-                'co2_saved': 0,  # Reference mode
-                'route': "Direct Flight",
-                'route_factor': determine_mileage_type(base_distance)
-            },
-            'Rail': {
-                'duration': calculate_journey_time('rail', base_distance, is_round_trip),
-                'distance': base_distance * TRANSPORT_MODES['rail']['distance_multiplier'],
-                'co2': calculate_transport_emissions('rail', base_distance, passengers),
-                'co2_saved': result.total_emissions - calculate_transport_emissions('rail', base_distance, passengers),
-                'route': "Via Rail Network",
-                'route_factor': f"{TRANSPORT_MODES['rail']['distance_multiplier']}x"
-            },
-            'Bus': {
-                'duration': calculate_journey_time('bus', base_distance, is_round_trip),
-                'distance': base_distance * TRANSPORT_MODES['bus']['distance_multiplier'],
-                'co2': calculate_transport_emissions('bus', base_distance, passengers),
-                'co2_saved': result.total_emissions - calculate_transport_emissions('bus', base_distance, passengers),
-                'route': "Via Road Network",
-                'route_factor': f"{TRANSPORT_MODES['bus']['distance_multiplier']}x"
-            }
-        }
-
-        # Add data to table
-        for mode, data in transport_modes.items():
-            self.transport_tree.insert('', 'end', values=(
+            time = calculate_journey_time(mode, distance, self.round_trip_var.get())
+            emissions = calculate_transport_emissions(
                 mode,
-                data['duration'],
-                f"{data['distance']:,.1f}",
-                f"{data['co2']:.2f}",
-                f"{data['co2_saved']:.2f}",
-                data['route'],
-                data['route_factor']
-            ))
+                distance,
+                int(self.passengers_entry.get()),
+                is_round_trip=self.round_trip_var.get()
+            )
+            co2_saved = result.total_emissions - emissions if mode != 'air' else 0
+
+            co2_saved_str = 'N/A' if mode == 'air' else f'{co2_saved:15.2f}'
+
+            self.result_text.insert(tk.END,
+                                    f"{mode:20} {time:<8} {distance:15.1f} {emissions:15.2f} {co2_saved_str:>15}\n")
+
+        self.result_text.insert(tk.END, "=" * 80 + "\n\n")
+
+    def display_ground_routes(self, result):
+        self.result_text.insert(tk.END, "\nGround Transport Routes:\n")
+        self.result_text.insert(tk.END,
+                                f"Rail: Southern European Rail Network (Distance factor: {TRANSPORT_MODES['rail']['distance_multiplier']:.2f})\n")
+        self.result_text.insert(tk.END,
+                                f"Bus: Southern European Bus Network (Distance factor: {TRANSPORT_MODES['bus']['distance_multiplier']:.2f})\n\n")
+
+    def calculate_time_difference(self, time1: str, time2: str) -> str:
+
+        """
+
+        Calculate difference between two time strings in format 'XXh YYm'
+
+
+
+        Args:
+
+            time1: First time string
+
+            time2: Second time string
+
+
+
+        Returns:
+
+            str: Formatted time difference
+
+        """
+
+        def time_to_minutes(time_str: str) -> int:
+            parts = time_str.split('h ')
+
+            hours = int(parts[0])
+
+            minutes = int(parts[1].replace('m', ''))
+
+            return hours * 60 + minutes
+
+        t1_minutes = time_to_minutes(time1)
+
+        t2_minutes = time_to_minutes(time2)
+
+        diff_minutes = t2_minutes - t1_minutes
+
+        hours = diff_minutes // 60
+
+        minutes = diff_minutes % 60
+
+        return f"{hours}h {minutes:02d}m"
+
+    def display_alternative_impact(self, result):
+        self.result_text.insert(tk.END, "\nAlternative Transport Environmental Impact:\n")
+        self.result_text.insert(tk.END, "-" * 80 + "\n")
+
+        # Calculate air time first
+        air_time = calculate_journey_time('air', result.distance_km, self.round_trip_var.get())
+
+        # Calculate rail impact
+        rail_distance = result.distance_km * TRANSPORT_MODES['rail']['distance_multiplier']
+        rail_emissions = calculate_transport_emissions('rail', rail_distance, int(self.passengers_entry.get()))
+        rail_time = calculate_journey_time('rail', rail_distance, self.round_trip_var.get())
+        rail_time_diff = self.calculate_time_difference(air_time, rail_time)
+
+        self.result_text.insert(tk.END,
+                                f"Rail option would reduce emissions by {result.total_emissions - rail_emissions:.2f} tons "
+                                f"({((result.total_emissions - rail_emissions) / result.total_emissions) * 100:.1f}%) "
+                                f"and add {rail_time_diff}\n")
+
+        # Calculate bus impact
+        bus_distance = result.distance_km * TRANSPORT_MODES['bus']['distance_multiplier']
+        bus_emissions = calculate_transport_emissions('bus', bus_distance, int(self.passengers_entry.get()))
+        bus_time = calculate_journey_time('bus', bus_distance, self.round_trip_var.get())
+        bus_time_diff = self.calculate_time_difference(air_time, bus_time)
+
+        self.result_text.insert(tk.END,
+                                f"Bus option would reduce emissions by {result.total_emissions - bus_emissions:.2f} tons "
+                                f"({((result.total_emissions - bus_emissions) / result.total_emissions) * 100:.1f}%) "
+                                f"and add {bus_time_diff}\n")
+
+        self.result_text.insert(tk.END, "-" * 80 + "\n\n")
+
     def _calculate_air_route_factor(self, distance_km: float) -> float:
 
         """Calculate route factor for air travel"""
@@ -400,13 +451,13 @@ class MainWindow(tk.Tk):
         # Matches treeview
         self.matches_tree = ttk.Treeview(
             matches_frame,
-            columns=("Home Team", "Away Team", "Competition", "Distance", "Emissions"),
+            columns=("Home Team", "Away Team", "Competition", "Distance (km)", "Emissions (tons)"),
             show='headings',
             height=15
         )
 
         # Configure columns with sorting
-        for col in ["Home Team", "Away Team", "Competition", "Distance", "Emissions"]:
+        for col in ["Home Team", "Away Team", "Competition", "Distance (km)", "Emissions (tons)"]:
             self.matches_tree.heading(col,
                                       text=col,
                                       anchor='center',
@@ -535,8 +586,8 @@ class MainWindow(tk.Tk):
             result = self.calculator.calculate_flight_emissions(
                 home_coords['lat'], home_coords['lon'],
                 away_coords['lat'], away_coords['lon'],
-                passengers=passengers,
-                is_round_trip=is_round_trip
+                passengers=30,
+                is_round_trip=True  # Make sure this is consistent
             )
 
             # Display results
@@ -657,91 +708,143 @@ class MainWindow(tk.Tk):
             return value
 
     def update_analysis_display(self):
+
         if self.matches_data is None:
             return
 
         self.summary_tree.delete(*self.summary_tree.get_children())
+
         self.matches_tree.delete(*self.matches_tree.get_children())
 
         try:
+
             total_matches = total_emissions = total_distance = 0
+
             matches_data = []
 
             competitions = self.matches_data.groupby('Competition')
+
             for comp_name, group in competitions:
+
                 comp_emissions = comp_distance = 0
+
                 match_count = len(group)
 
                 for _, row in group.iterrows():
+
                     home_team = row['Home Team']
+
                     away_team = row['Away Team']
 
                     home_airport = get_team_airport(home_team)
+
                     away_airport = get_team_airport(away_team)
 
                     if home_airport and away_airport:
+
                         home_coords = get_airport_coordinates(home_airport)
+
                         away_coords = get_airport_coordinates(away_airport)
 
                         if home_coords and away_coords:
                             result = self.calculator.calculate_flight_emissions(
+
                                 home_coords['lat'], home_coords['lon'],
+
                                 away_coords['lat'], away_coords['lon'],
+
                                 passengers=30,
+
                                 is_round_trip=True
+
                             )
 
                             comp_emissions += result.total_emissions
+
                             comp_distance += result.distance_km
+
                             total_emissions += result.total_emissions
+
                             total_distance += result.distance_km
+
                             total_matches += 1
 
                             matches_data.append({
+
                                 'home_team': home_team,
+
                                 'away_team': away_team,
+
                                 'competition': comp_name,
+
                                 'distance': result.distance_km,
+
                                 'emissions': result.total_emissions
+
                             })
 
                 if match_count > 0:
                     avg_emissions = comp_emissions / match_count
+
                     self.summary_tree.insert('', 'end', values=(
+
                         comp_name,
+
                         self.format_number(match_count),
+
                         self.format_number(comp_emissions),
+
                         self.format_number(avg_emissions)
+
                     ))
 
             if total_matches > 0:
                 self.summary_tree.insert('', 'end', values=(
+
                     "TOTAL",
+
                     self.format_number(total_matches),
+
                     self.format_number(total_emissions),
+
                     self.format_number(total_emissions / total_matches)
+
                 ), tags=('total',))
 
                 self.summary_tree.tag_configure('total',
+
                                                 background='#E8E8E8',
+
                                                 font=('Segoe UI', 9, 'bold')
+
                                                 )
 
             for i, match in enumerate(matches_data):
                 row_tags = ('even',) if i % 2 == 0 else ('odd',)
+
                 self.matches_tree.insert('', 'end', values=(
+
                     match['home_team'],
+
                     match['away_team'],
+
                     match['competition'],
+
                     self.format_number(match['distance']),
+
                     self.format_number(match['emissions'])
+
                 ), tags=row_tags)
 
             self.matches_tree.tag_configure('even', background='#f0f0f0')
+
             self.matches_tree.tag_configure('odd', background='#ffffff')
 
+
         except Exception as e:
+
             messagebox.showerror("Analysis Error", f"Error updating analysis: {str(e)}")
+
             raise
 
     def on_round_trip_toggle(self):
@@ -767,121 +870,67 @@ class MainWindow(tk.Tk):
             passengers = int(self.passengers_entry.get())
             is_round_trip = self.round_trip_var.get()
 
-            # Input validation
+            # Validate inputs
             if not home_team or not away_team:
                 raise ValueError("Please enter both home and away teams")
 
-            # Validate airports
+            # Get airports
             home_airport = get_team_airport(home_team)
             away_airport = get_team_airport(away_team)
 
-            if not home_airport:
-                raise ValueError(f"Airport not found for {home_team}")
-            if not away_airport:
-                raise ValueError(f"Airport not found for {away_team}")
+            if not home_airport or not away_airport:
+                raise ValueError("Airport not found for one or both teams")
 
             # Get coordinates
             home_coords = get_airport_coordinates(home_airport)
             away_coords = get_airport_coordinates(away_airport)
 
-            if not home_coords:
-                raise ValueError(f"Coordinates not found for {home_team}'s airport")
-            if not away_coords:
-                raise ValueError(f"Coordinates not found for {away_team}'s airport")
+            if not home_coords or not away_coords:
+                raise ValueError("Coordinates not found for one or both airports")
 
             # Calculate emissions
             result = self.calculator.calculate_flight_emissions(
-
                 home_coords['lat'], home_coords['lon'],
-
                 away_coords['lat'], away_coords['lon'],
-
                 passengers=passengers,
-
                 is_round_trip=is_round_trip
-
             )
-
-            # Store the latest result
-
-            self.latest_result = result
 
             # Display results
-
             self.display_results(result, home_team, away_team)
-
-            # Update transport comparison
-
             self.update_transport_comparison(result)
-
             self.export_button.config(state='normal')
 
-
-        except ValueError as e:
-
-            messagebox.showerror("Input Error", str(e))
-
         except Exception as e:
-
-            messagebox.showerror("Error", f"An error occurred: {str(e)}")
+            messagebox.showerror("Error", str(e))
+            self.last_error = str(e)
+            self.copy_error_button.config(state='normal')
 
     def display_results(self, result, home_team, away_team):
-        """Display calculation results in text widget"""
-        self.result_text.delete('1.0', tk.END)
 
-        try:
-            # Calculate financial metrics
-            financial_metrics = self.calculator.calculate_match_costs(
-                distance_km=result.distance_km,
-                emissions_mt=result.total_emissions,
-                is_international=True,
-                time_horizon_years=5
-            )
+        # Clear previous results
 
-            if financial_metrics is None:
-                raise ValueError("Failed to calculate financial metrics")
+        self.result_text.delete(1.0, tk.END)
 
-            # Basic journey information
-            journey_info = (
-                f"Match: {home_team} vs {away_team}\n"
-                f"Distance: {result.distance_km:,.2f} km\n"
-                f"Total Emissions: {result.total_emissions:.2f} metric tons CO2\n"
-                f"Per Passenger: {result.per_passenger:.2f} metric tons CO2\n\n"
-            )
+        # Flight Details Section
 
-            # Financial metrics
-            financial_info = (
-                "Financial Impact:\n"
-                f"Carbon Cost: ${financial_metrics.carbon_cost:,.2f}\n"
-                f"Operational Cost: ${financial_metrics.operational_cost:,.2f}\n"
-                f"Total Impact: ${financial_metrics.total_impact:,.2f}\n"
-                f"Risk-Adjusted Total: ${financial_metrics.total_risk_adjusted:,.2f}\n\n"
+        self.result_text.insert(tk.END, "Flight Details:\n")
 
-                "Risk Analysis:\n"
-                f"Risk Exposure: ${financial_metrics.risk_exposure:,.2f}\n"
-                f"Carbon Market Exposure: ${financial_metrics.carbon_market_exposure:,.2f}\n"
-                f"Carbon Price Sensitivity: ${financial_metrics.carbon_price_sensitivity:,.2f}\n\n"
+        self.result_text.insert(tk.END, f"Home Team: {home_team} (Airport: {get_team_airport(home_team)})\n")
 
-                "Efficiency Metrics:\n"
-                f"Carbon Intensity: {financial_metrics.carbon_intensity:.4f}\n"
-                f"Marginal Abatement Cost: ${financial_metrics.marginal_abatement_cost:,.2f}\n"
-                f"Cost per Passenger Mile: ${financial_metrics.cost_per_passenger_mile:.2f}\n\n"
+        self.result_text.insert(tk.END, f"Away Team: {away_team} (Airport: {get_team_airport(away_team)})\n")
 
-                "Long-term Impact:\n"
-                f"Social Cost of Carbon: ${financial_metrics.social_cost_carbon:,.2f}\n"
-                f"Regulatory Compliance Cost: ${financial_metrics.regulatory_compliance_cost:,.2f}\n"
-                f"Net Present Value: ${financial_metrics.net_present_value:,.2f}\n"
-                f"Emission Reduction ROI: {financial_metrics.emission_reduction_roi:.1%}\n"
-            )
+        self.result_text.insert(tk.END, f"Distance: {result.distance_km:.2f} km")  # Changed from miles to km
 
-            # Combine all information
-            full_report = journey_info + financial_info
-            self.result_text.insert('1.0', full_report)
+        if self.round_trip_var.get():
+            self.result_text.insert(tk.END, " (round trip)")
 
-        except Exception as e:
-            error_message = f"Error displaying results: {str(e)}"
-            self.result_text.delete('1.0', tk.END)
-            self.result_text.insert('1.0', error_message)
+        self.result_text.insert(tk.END, f"\nPassengers: {self.passengers_entry.get()}\n")
+
+        flight_time = calculate_journey_time('air', result.distance_km, self.round_trip_var.get())
+
+        self.result_text.insert(tk.END, f"Estimated Flight Time: {flight_time}\n\n")
+
 
     def export_to_csv(self):
         """Export analysis results to CSV"""
