@@ -14,4 +14,6 @@ if __name__ == "__main__":
 
 
 
-#add new results and ask if formulas are right
+#add economic impact
+#also make sure environmental impacts are accurate
+#

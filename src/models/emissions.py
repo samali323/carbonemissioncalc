@@ -39,7 +39,7 @@ class EmissionsCalculator:
     def __init__(self):
         """Initialize the emissions calculator."""
         self.latest_result: Optional[EmissionsResult] = None
-        self.icao_calculator = ICAOEmissionsCalculator()
+        self.icao_calculator = ICAOEmissionsCalculator()  # Make sure this is initialized
 
     def calculate_match_costs(
             self,
@@ -120,84 +120,49 @@ class EmissionsCalculator:
             return None
 
     def calculate_flight_emissions(
-
             self,
-
             origin_lat: float,
-
             origin_lon: float,
-
             dest_lat: float,
-
             dest_lon: float,
-
             passengers: int,
-
             is_round_trip: bool = False,
-
             cabin_class: str = "business",
-
             aircraft_type: str = "A320",
-
             cargo_tons: float = 2.0,
-
             is_international: bool = True
-
     ) -> EmissionsResult:
-
         """Calculate emissions for a flight using ICAO methodology."""
-
-        # Calculate distance
-
-        distance = calculate_distance(origin_lat, origin_lon, dest_lat, dest_lon)
+        # Calculate base distance (one-way)
+        base_distance = calculate_distance(origin_lat, origin_lon, dest_lat, dest_lon)
 
         # Calculate base emissions using ICAO calculator
-
-        icao_results = self.icao_calculator.calculate_emissions(  # Changed from calculate_flight_emissions
-
-            distance_km=distance,
-
+        icao_results = self.icao_calculator.calculate_emissions(
+            distance_km=base_distance,
             aircraft_type=aircraft_type,
-
             cabin_class=cabin_class,
-
             passengers=passengers,
-
             cargo_tons=cargo_tons,
-
             is_international=is_international
-
         )
 
-        # Adjust for round trip if needed
-
+        # Calculate total emissions based on round trip setting
+        total_emissions = icao_results["emissions_total_kg"]
         if is_round_trip:
-            distance *= 2
-
-            icao_results["emissions_total_kg"] *= 2
-
-            icao_results["fuel_consumption_kg"] *= 2
+            total_emissions *= 2
+            base_distance *= 2
 
         # Create result object
-
         result = EmissionsResult(
-
-            total_emissions=icao_results["emissions_total_kg"] / 1000,  # Convert to metric tons
-
-            per_passenger=icao_results["emissions_per_pax_kg"] / 1000,
-
-            distance_km=distance,
-
-            corrected_distance_km=icao_results["corrected_distance_km"],
-
-            fuel_consumption=icao_results["fuel_consumption_kg"],
-
-            flight_type=determine_mileage_type(distance),
-
+            total_emissions=total_emissions / 1000,  # Convert to metric tons
+            per_passenger=(total_emissions / passengers) / 1000,
+            distance_km=base_distance,  # This will be doubled for round trip
+            corrected_distance_km=icao_results["corrected_distance_km"] * (2 if is_round_trip else 1),
+            fuel_consumption=icao_results["fuel_consumption_kg"] * (2 if is_round_trip else 1),
+            flight_type=determine_mileage_type(base_distance / (2 if is_round_trip else 1)),
+            # Use one-way distance for type
             is_round_trip=is_round_trip,
-
             additional_data=icao_results["factors_applied"]
-
         )
 
         return result

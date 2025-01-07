@@ -9,13 +9,14 @@ from tkinter import ttk, messagebox, filedialog
 import pandas as pd
 import self
 
-from src.config.constants import DEFAULT_PASSENGERS, EMISSION_FACTORS, TRANSPORT_MODES, ALTERNATIVE_TRANSPORT_PREMIUM, \
-    KM_PER_MILE
+from src.config.constants import DEFAULT_PASSENGERS, EMISSION_FACTORS, TRANSPORT_MODES
 from src.data.team_data import get_team_airport, get_airport_coordinates
 from src.gui.widgets.auto_complete import TeamAutoComplete, CompetitionAutoComplete
 from src.models.emissions import EmissionsCalculator
-from src.utils.calculations import calculate_transport_emissions, determine_mileage_type, calculate_equivalencies
-
+from src.utils.calculations import calculate_transport_emissions, calculate_equivalencies
+from src.models.emissions import EmissionsResult
+from src.utils.calculations import calculate_distance, determine_mileage_type
+from src.models.icao_calculator import ICAOEmissionsCalculator
 
 class MainWindow(tk.Tk):
     def __init__(self):
@@ -220,41 +221,47 @@ class MainWindow(tk.Tk):
         self.transport_tree.pack(fill='x', expand=True)
 
     def update_transport_comparison(self, result):
-
         self.result_text.insert(tk.END, "\nTransport Mode Comparison:\n")
-
         self.result_text.insert(tk.END, "=" * 80 + "\n")
-
         self.result_text.insert(tk.END,
-
                                 f"{'Mode':20}  {'Distance (km)':15} {'CO2 (metric tons)':15} {'CO2 Saved':15}\n")
-
         self.result_text.insert(tk.END, "-" * 80 + "\n")
 
         # Get team names from the entries
-
         home_team = self.home_team_entry.get()
-
         away_team = self.away_team_entry.get()
+        is_round_trip = self.round_trip_var.get()
+        passengers = int(self.passengers_entry.get())
 
-        # Calculate air emissions first
+        # Use the emissions from the flight calculation result directly
+        air_emissions = result.total_emissions  # This already includes round trip if applicable
+        base_distance = result.distance_km  # This already includes round trip if applicable
 
-        air_emissions = calculate_transport_emissions(
+        # Calculate rail and bus emissions using the base distance
+        rail_distance = (base_distance / (2 if is_round_trip else 1)) * TRANSPORT_MODES['rail']['distance_multiplier']
+        bus_distance = (base_distance / (2 if is_round_trip else 1)) * TRANSPORT_MODES['bus']['distance_multiplier']
 
-            'air',
-
-            result.distance_km,
-
-            int(self.passengers_entry.get()),
-
-            is_round_trip=self.round_trip_var.get(),
-
-            home_team=home_team,
-
-            away_team=away_team
-
+        # Calculate emissions for alternative modes
+        rail_emissions = calculate_transport_emissions(
+            'rail',
+            rail_distance * (2 if is_round_trip else 1),
+            passengers,
+            is_round_trip=is_round_trip
+        )
+        bus_emissions = calculate_transport_emissions(
+            'bus',
+            bus_distance * (2 if is_round_trip else 1),
+            passengers,
+            is_round_trip=is_round_trip
         )
 
+        # Display results
+        self.result_text.insert(tk.END,
+                                f"{'Air':20}  {base_distance:15.1f} {air_emissions:15.2f} {'N/A':15}\n")
+        self.result_text.insert(tk.END,
+                                f"{'Rail':20}  {rail_distance * (2 if is_round_trip else 1):15.1f} {rail_emissions:15.2f} {air_emissions - rail_emissions:15.2f}\n")
+        self.result_text.insert(tk.END,
+                                f"{'Bus':20}  {bus_distance * (2 if is_round_trip else 1):15.1f} {bus_emissions:15.2f} {air_emissions - bus_emissions:15.2f}\n")
     def display_ground_routes(self, result):
         self.result_text.insert(tk.END, "\nGround Transport Routes:\n")
         self.result_text.insert(tk.END,
@@ -490,70 +497,126 @@ class MainWindow(tk.Tk):
         self.matches_tree.bind("<Return>", self.select_match)
 
     def select_match(self, event):
+
         """Handle match selection from analysis tab"""
+
         selection = self.matches_tree.selection()
+
         if not selection:
             return
 
         # Get match details
+
         values = self.matches_tree.item(selection[0])['values']
 
         # Update calculator entries
-        self.home_team_entry.set_text(values[0])  # Use set_text() for TeamAutoComplete
-        self.away_team_entry.set_text(values[1])
-        self.round_trip_var.set(True)
 
-        # Calculate emissions and update transport comparison
+        self.home_team_entry.set_text(values[0])  # Use set_text() for TeamAutoComplete
+
+        self.away_team_entry.set_text(values[1])
+
+        self.round_trip_var.set(False)
+
         try:
+
             # Get inputs
+
             home_team = values[0]
+
             away_team = values[1]
+
             passengers = int(self.passengers_entry.get())
+
             is_round_trip = self.round_trip_var.get()
 
             # Get airports and coordinates
+
             home_airport = get_team_airport(home_team)
+
             away_airport = get_team_airport(away_team)
 
             if not home_airport or not away_airport:
                 raise ValueError("Airport not found for one or both teams")
 
             home_coords = get_airport_coordinates(home_airport)
+
             away_coords = get_airport_coordinates(away_airport)
 
             if not home_coords or not away_coords:
                 raise ValueError("Coordinates not found for one or both airports")
 
-            # Calculate emissions
-            result = self.calculator.calculate_flight_emissions(
-                home_coords['lat'], home_coords['lon'],
-                away_coords['lat'], away_coords['lon'],
-                passengers=30,
-                is_round_trip=True  # Make sure this is consistent
+            # Calculate distance first
+
+            distance = calculate_distance(
+
+                home_coords['lat'],
+
+                home_coords['lon'],
+
+                away_coords['lat'],
+
+                away_coords['lon']
+
+            )
+
+            # Calculate emissions using ICAO calculator
+
+            result_dict = self.calculator.icao_calculator.calculate_emissions(
+
+                distance_km=distance,
+
+                aircraft_type="A320",
+
+                cabin_class="business",
+
+                passengers=passengers,
+
+                cargo_tons=2.0,
+
+                is_international=True
+
+            )
+
+            # Create EmissionsResult object
+
+            result = EmissionsResult(
+
+                total_emissions=result_dict['emissions_total_kg'] / 1000,  # Convert to metric tons
+
+                per_passenger=result_dict['emissions_per_pax_kg'] / 1000,
+
+                distance_km=distance,
+
+                corrected_distance_km=result_dict['corrected_distance_km'],
+
+                fuel_consumption=result_dict['fuel_consumption_kg'],
+
+                flight_type=determine_mileage_type(distance),
+
+                is_round_trip=is_round_trip,
+
+                additional_data=result_dict['factors_applied']
+
             )
 
             # Display results
+
             self.display_results(result, home_team, away_team)
 
             # Update transport comparison table
-            rail_distance = result.distance_km * 1.2  # Assuming 20% longer route for rail
-            bus_distance = result.distance_km * 1.4  # Assuming 40% longer route for bus
 
-
-            # Calculate emissions for alternative modes
-            rail_emissions = calculate_transport_emissions('rail', rail_distance, passengers)
-            bus_emissions = calculate_transport_emissions('bus', bus_distance, passengers)
-
-            # Update transport comparison table
             self.update_transport_comparison(result)
+
             self.export_button.config(state='normal')
 
             # Switch to calculator tab
+
             self.notebook.select(self.calculator_tab)
 
-        except Exception as e:
-            messagebox.showerror("Error", f"An error occurred: {str(e)}")
 
+        except Exception as e:
+
+            messagebox.showerror("Error", f"An error occurred: {str(e)}")
 
     def create_settings_tab(self):
         # Load data frame
@@ -686,6 +749,24 @@ class MainWindow(tk.Tk):
                         away_coords = get_airport_coordinates(away_airport)
 
                         if home_coords and away_coords:
+
+                            # Calculate distance first
+
+                            distance = calculate_distance(
+
+                                home_coords['lat'], home_coords['lon'],
+
+                                away_coords['lat'], away_coords['lon']
+
+                            )
+
+                            # Skip matches with 0.0 km distance
+
+                            if distance == 0.0:
+                                match_count -= 1  # Reduce match count for zero distance matches
+
+                                continue
+
                             result = self.calculator.calculate_flight_emissions(
 
                                 home_coords['lat'], home_coords['lon'],
@@ -718,6 +799,8 @@ class MainWindow(tk.Tk):
 
                             })
 
+                # Only add competition summary if there are valid matches
+
                 if match_count > 0:
                     avg_emissions = comp_emissions / match_count
 
@@ -732,6 +815,8 @@ class MainWindow(tk.Tk):
                         self.format_number(avg_emissions)
 
                     ))
+
+            # Add total row only if there are valid matches
 
             if total_matches > 0:
                 self.summary_tree.insert('', 'end', values=(
@@ -753,6 +838,8 @@ class MainWindow(tk.Tk):
                                                 font=('Segoe UI', 9, 'bold')
 
                                                 )
+
+            # Update matches tree with only non-zero distance matches
 
             for i, match in enumerate(matches_data):
                 row_tags = ('even',) if i % 2 == 0 else ('odd',)
@@ -782,10 +869,14 @@ class MainWindow(tk.Tk):
 
         """Recalculate emissions when round trip toggle changes"""
 
-        # Check if we have valid team entries instead of checking for latest_result
+        try:
 
-        if self.home_team_entry.get() and self.away_team_entry.get():
-            self.calculate()  # This will trigger update_transport_comparison
+            if self.home_team_entry.get() and self.away_team_entry.get():
+                self.calculate()  # This will trigger a full recalculation
+
+        except Exception as e:
+
+            messagebox.showerror("Error", f"Error updating results: {str(e)}")
 
     def on_passengers_change(self, *args):
 
@@ -795,50 +886,124 @@ class MainWindow(tk.Tk):
             self.calculate()
 
     def calculate(self):
+
         """Calculate emissions for selected teams"""
+
         try:
+
             # Get inputs
+
             home_team = self.home_team_entry.get()
+
             away_team = self.away_team_entry.get()
+
             passengers = int(self.passengers_entry.get())
+
             is_round_trip = self.round_trip_var.get()
 
             # Validate inputs
+
             if not home_team or not away_team:
                 raise ValueError("Please enter both home and away teams")
 
             # Get airports
+
             home_airport = get_team_airport(home_team)
+
             away_airport = get_team_airport(away_team)
 
             if not home_airport or not away_airport:
                 raise ValueError("Airport not found for one or both teams")
 
             # Get coordinates
+
             home_coords = get_airport_coordinates(home_airport)
+
             away_coords = get_airport_coordinates(away_airport)
 
             if not home_coords or not away_coords:
                 raise ValueError("Coordinates not found for one or both airports")
 
-            # Calculate emissions
-            result = self.calculator.calculate_flight_emissions(
-                home_coords['lat'], home_coords['lon'],
-                away_coords['lat'], away_coords['lon'],
-                passengers=passengers,
-                is_round_trip=is_round_trip
+            # Calculate distance first
+
+            distance = calculate_distance(
+
+                home_coords['lat'],
+
+                home_coords['lon'],
+
+                away_coords['lat'],
+
+                away_coords['lon']
+
             )
 
-            # Store as latest result
+            # Calculate emissions using ICAO calculator
+
+            result_dict = self.calculator.icao_calculator.calculate_emissions(
+
+                distance_km=distance,
+
+                aircraft_type="A320",
+
+                cabin_class="business",
+
+                passengers=passengers,
+
+                cargo_tons=2.0,
+
+                is_international=True
+
+            )
+
+            # Adjust for round trip if needed
+
+            if is_round_trip:
+                result_dict["emissions_total_kg"] *= 2
+
+                result_dict["emissions_per_pax_kg"] *= 2
+
+                distance *= 2
+
+            # Create EmissionsResult object
+
+            result = EmissionsResult(
+
+                total_emissions=result_dict['emissions_total_kg'] / 1000,
+
+                per_passenger=result_dict['emissions_per_pax_kg'] / 1000,
+
+                distance_km=distance,
+
+                corrected_distance_km=result_dict['corrected_distance_km'],
+
+                fuel_consumption=result_dict['fuel_consumption_kg'],
+
+                flight_type=determine_mileage_type(distance),
+
+                is_round_trip=is_round_trip,
+
+                additional_data=result_dict['factors_applied']
+
+            )
+
+            # Store as latest result and update display
+
             self.latest_result = result
-            # Display results
+
             self.display_results(result, home_team, away_team)
+
             self.update_transport_comparison(result)
+
             self.export_button.config(state='normal')
 
+
         except Exception as e:
+
             messagebox.showerror("Error", str(e))
+
             self.last_error = str(e)
+
             self.copy_error_button.config(state='normal')
 
     def display_results(self, result, home_team, away_team):
