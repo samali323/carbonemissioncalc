@@ -25,13 +25,11 @@ TRANSPORT_MODES = {
 
         'mode': 'air',
 
-        'co2_per_km': 0.0,  # Calculated differently for air
+        'co2_per_km': 0.0,  # Handled separately using EMISSION_FACTORS
 
         'speed': 800,       # km/h
 
-        'cost_per_km': 0.50, # USD per passenger-km
-
-        'distance_multiplier': 1.0  # Direct route
+        'distance_multiplier': 1.0
 
     },
 
@@ -39,13 +37,11 @@ TRANSPORT_MODES = {
 
         'mode': 'rail',
 
-        'co2_per_km': 0.041,  # Modern electric train
+        'co2_per_km': 0.041,  # kg CO2 per passenger-km
 
-        'speed': 200,         # Average high-speed rail
+        'speed': 200,
 
-        'cost_per_km': 0.18,
-
-        'distance_multiplier': 1.2  # 20% longer than air route
+        'distance_multiplier': 1.2
 
     },
 
@@ -53,18 +49,15 @@ TRANSPORT_MODES = {
 
         'mode': 'bus',
 
-        'co2_per_km': 0.027,  # Modern coach bus
+        'co2_per_km': 0.027,  # kg CO2 per passenger-km
 
-        'speed': 80,          # Average coach speed
+        'speed': 80,
 
-        'cost_per_km': 0.12,
-
-        'distance_multiplier': 1.4  # 40% longer than air route
+        'distance_multiplier': 1.3  # Updated from 1.4
 
     }
 
 }
-# Emission factors for different flight types
 EMISSION_FACTORS = {
     'LongBusiness': 0.163 / 1.60934,    # Convert to kg CO2 per passenger-km
     'LongEconomy': 0.163 / 1.60934,

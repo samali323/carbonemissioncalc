@@ -41,29 +41,33 @@ def calculate_transport_emissions(
         is_round_trip: bool = False
 ) -> float:
     """Calculate emissions for different transport modes."""
-    # Return 0 if distance is 0
     if distance_km == 0:
         return 0.0
 
+    # Calculate one-way distance if round trip
+    one_way_distance = distance_km / 2 if is_round_trip else distance_km
+
     if mode == 'air':
-        avg_speed = TRANSPORT_MODES[mode]['speed']
-        flight_time = distance_km / avg_speed
-        emissions_per_passenger = 250 * flight_time  # kg CO2
-        total_emissions = (emissions_per_passenger * passengers) / 1000
+        flight_type = determine_mileage_type(one_way_distance)
+        if flight_type == "Short":
+            emissions_factor = EMISSION_FACTORS['ShortBusiness']
+        elif flight_type == "Medium":
+            emissions_factor = EMISSION_FACTORS['MediumBusiness']
+        else:
+            emissions_factor = EMISSION_FACTORS['LongBusiness']
+
+        total_emissions = (one_way_distance * emissions_factor * passengers) / 1000
     elif mode in ['rail', 'bus']:
         mode_config = TRANSPORT_MODES[mode]
-        adjusted_distance = distance_km * mode_config['distance_multiplier']
+        adjusted_distance = one_way_distance * mode_config['distance_multiplier']
         emissions_per_passenger_km = mode_config['co2_per_km']
         total_emissions = (adjusted_distance * emissions_per_passenger_km * passengers) / 1000
-    else:
-        raise ValueError(f"Unknown transport mode: {mode}")
 
     # Double emissions for round trip
     if is_round_trip:
         total_emissions *= 2
 
     return total_emissions
-
 
 def calculate_journey_time(mode: str, distance_km: float, is_round_trip: bool = False) -> str:
     """Calculate journey time based on mode and distance."""

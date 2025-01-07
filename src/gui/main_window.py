@@ -222,31 +222,64 @@ class MainWindow(tk.Tk):
         self.transport_tree.pack(fill='x', expand=True)
 
     def update_transport_comparison(self, result):
+
         self.result_text.insert(tk.END, "\nTransport Mode Comparison:\n")
+
         self.result_text.insert(tk.END, "=" * 80 + "\n")
+
         self.result_text.insert(tk.END,
+
                                 f"{'Mode':20} {'Time':8} {'Distance (km)':15} {'CO2 (tons)':15} {'CO2 Saved':15}\n")
+
         self.result_text.insert(tk.END, "-" * 80 + "\n")
 
+        # Calculate air emissions first
+
+        air_emissions = calculate_transport_emissions(
+
+            'air',
+
+            result.distance_km,
+
+            int(self.passengers_entry.get()),
+
+            is_round_trip=self.round_trip_var.get()
+
+        )
+
         # Calculate for each mode
+
         modes = ['air', 'rail', 'bus']
+
         for mode in modes:
+
             distance = result.distance_km
+
             if mode != 'air':
                 distance *= TRANSPORT_MODES[mode]['distance_multiplier']
 
             time = calculate_journey_time(mode, distance, self.round_trip_var.get())
+
             emissions = calculate_transport_emissions(
+
                 mode,
+
                 distance,
+
                 int(self.passengers_entry.get()),
+
                 is_round_trip=self.round_trip_var.get()
+
             )
-            co2_saved = result.total_emissions - emissions if mode != 'air' else 0
+
+            # Calculate CO2 saved (difference between air and current mode)
+
+            co2_saved = air_emissions - emissions if mode != 'air' else 0
 
             co2_saved_str = 'N/A' if mode == 'air' else f'{co2_saved:15.2f}'
 
             self.result_text.insert(tk.END,
+
                                     f"{mode:20} {time:<8} {distance:15.1f} {emissions:15.2f} {co2_saved_str:>15}\n")
 
         self.result_text.insert(tk.END, "=" * 80 + "\n\n")
@@ -257,49 +290,6 @@ class MainWindow(tk.Tk):
                                 f"Rail: Southern European Rail Network (Distance factor: {TRANSPORT_MODES['rail']['distance_multiplier']:.2f})\n")
         self.result_text.insert(tk.END,
                                 f"Bus: Southern European Bus Network (Distance factor: {TRANSPORT_MODES['bus']['distance_multiplier']:.2f})\n\n")
-
-    def calculate_time_difference(self, time1: str, time2: str) -> str:
-
-        """
-
-        Calculate difference between two time strings in format 'XXh YYm'
-
-
-
-        Args:
-
-            time1: First time string
-
-            time2: Second time string
-
-
-
-        Returns:
-
-            str: Formatted time difference
-
-        """
-
-        def time_to_minutes(time_str: str) -> int:
-            parts = time_str.split('h ')
-
-            hours = int(parts[0])
-
-            minutes = int(parts[1].replace('m', ''))
-
-            return hours * 60 + minutes
-
-        t1_minutes = time_to_minutes(time1)
-
-        t2_minutes = time_to_minutes(time2)
-
-        diff_minutes = t2_minutes - t1_minutes
-
-        hours = diff_minutes // 60
-
-        minutes = diff_minutes % 60
-
-        return f"{hours}h {minutes:02d}m"
 
     def display_alternative_impact(self, result):
         self.result_text.insert(tk.END, "\nAlternative Transport Environmental Impact:\n")
@@ -450,21 +440,32 @@ class MainWindow(tk.Tk):
 
         # Matches treeview
         self.matches_tree = ttk.Treeview(
+
             matches_frame,
-            columns=("Home Team", "Away Team", "Competition", "Distance (km)", "Emissions (tons)"),
+
+            columns=("Home Team", "Away Team", "Competition"),  # Removed Distance and Emissions
+
             show='headings',
+
             height=15
+
         )
 
         # Configure columns with sorting
-        for col in ["Home Team", "Away Team", "Competition", "Distance (km)", "Emissions (tons)"]:
-            self.matches_tree.heading(col,
-                                      text=col,
-                                      anchor='center',
-                                      command=lambda c=col: self.sort_treeview(self.matches_tree, c, False)
-                                      )
-            self.matches_tree.column(col, anchor='center')
 
+        for col in ["Home Team", "Away Team", "Competition"]:  # Removed Distance and Emissions
+
+            self.matches_tree.heading(col,
+
+                                      text=col,
+
+                                      anchor='center',
+
+                                      command=lambda c=col: self.sort_treeview(self.matches_tree, c, False)
+
+                                      )
+
+            self.matches_tree.column(col, anchor='center')
         # Scrollbars
         y_scroll = ttk.Scrollbar(matches_frame, orient="vertical", command=self.matches_tree.yview)
         x_scroll = ttk.Scrollbar(matches_frame, orient="horizontal", command=self.matches_tree.xview)
@@ -777,10 +778,6 @@ class MainWindow(tk.Tk):
 
                                 'competition': comp_name,
 
-                                'distance': result.distance_km,
-
-                                'emissions': result.total_emissions
-
                             })
 
                 if match_count > 0:
@@ -829,10 +826,6 @@ class MainWindow(tk.Tk):
                     match['away_team'],
 
                     match['competition'],
-
-                    self.format_number(match['distance']),
-
-                    self.format_number(match['emissions'])
 
                 ), tags=row_tags)
 
@@ -927,9 +920,6 @@ class MainWindow(tk.Tk):
 
         self.result_text.insert(tk.END, f"\nPassengers: {self.passengers_entry.get()}\n")
 
-        flight_time = calculate_journey_time('air', result.distance_km, self.round_trip_var.get())
-
-        self.result_text.insert(tk.END, f"Estimated Flight Time: {flight_time}\n\n")
 
 
     def export_to_csv(self):
