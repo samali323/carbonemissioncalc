@@ -145,51 +145,15 @@ class EmissionsCalculator:
 
     ) -> EmissionsResult:
 
-        """
-
-        Calculate emissions for a flight using ICAO methodology.
-
-
-        Args:
-
-            origin_lat: Origin latitude
-
-            origin_lon: Origin longitude
-
-            dest_lat: Destination latitude
-
-            dest_lon: Destination longitude
-
-            passengers: Number of passengers
-
-            is_round_trip: Whether this is a round trip
-
-            cabin_class: Cabin class (economy, premium_economy, business, first)
-
-            aircraft_type: Type of aircraft
-
-            cargo_tons: Cargo weight in metric tons
-
-            is_international: Whether this is an international flight
-
-
-        Returns:
-
-            EmissionsResult object with calculation results
-
-        """
+        """Calculate emissions for a flight using ICAO methodology."""
 
         # Calculate distance
 
         distance = calculate_distance(origin_lat, origin_lon, dest_lat, dest_lon)
 
-        # Determine flight type
-
-        flight_type = determine_mileage_type(distance)
-
         # Calculate base emissions using ICAO calculator
 
-        icao_results = self.icao_calculator.calculate_emissions(
+        icao_results = self.icao_calculator.calculate_emissions(  # Changed from calculate_flight_emissions
 
             distance_km=distance,
 
@@ -228,15 +192,13 @@ class EmissionsCalculator:
 
             fuel_consumption=icao_results["fuel_consumption_kg"],
 
-            flight_type=flight_type,
+            flight_type=determine_mileage_type(distance),
 
             is_round_trip=is_round_trip,
 
             additional_data=icao_results["factors_applied"]
 
         )
-
-        self.latest_result = result
 
         return result
 

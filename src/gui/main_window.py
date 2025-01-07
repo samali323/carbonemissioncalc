@@ -14,7 +14,7 @@ from src.config.constants import DEFAULT_PASSENGERS, EMISSION_FACTORS, TRANSPORT
 from src.data.team_data import get_team_airport, get_airport_coordinates
 from src.gui.widgets.auto_complete import TeamAutoComplete, CompetitionAutoComplete
 from src.models.emissions import EmissionsCalculator
-from src.utils.calculations import calculate_transport_emissions, determine_mileage_type
+from src.utils.calculations import calculate_transport_emissions, determine_mileage_type, calculate_equivalencies
 
 
 class MainWindow(tk.Tk):
@@ -227,9 +227,15 @@ class MainWindow(tk.Tk):
 
         self.result_text.insert(tk.END,
 
-                                f"{'Mode':20}  {'Distance (km)':15} {'CO2 (tons)':15} {'CO2 Saved':15}\n")
+                                f"{'Mode':20}  {'Distance (km)':15} {'CO2 (metric tons)':15} {'CO2 Saved':15}\n")
 
         self.result_text.insert(tk.END, "-" * 80 + "\n")
+
+        # Get team names from the entries
+
+        home_team = self.home_team_entry.get()
+
+        away_team = self.away_team_entry.get()
 
         # Calculate air emissions first
 
@@ -241,44 +247,13 @@ class MainWindow(tk.Tk):
 
             int(self.passengers_entry.get()),
 
-            is_round_trip=self.round_trip_var.get()
+            is_round_trip=self.round_trip_var.get(),
+
+            home_team=home_team,
+
+            away_team=away_team
 
         )
-
-        # Calculate for each mode
-
-        modes = ['air', 'rail', 'bus']
-
-        for mode in modes:
-
-            distance = result.distance_km
-
-            if mode != 'air':
-                distance *= TRANSPORT_MODES[mode]['distance_multiplier']
-
-            emissions = calculate_transport_emissions(
-
-                mode,
-
-                distance,
-
-                int(self.passengers_entry.get()),
-
-                is_round_trip=self.round_trip_var.get()
-
-            )
-
-            # Calculate CO2 saved (difference between air and current mode)
-
-            co2_saved = air_emissions - emissions if mode != 'air' else 0
-
-            co2_saved_str = 'N/A' if mode == 'air' else f'{co2_saved:15.2f}'
-
-            self.result_text.insert(tk.END,
-
-                                    f"{mode:20} {distance:15.1f} {emissions:15.2f} {co2_saved_str:>15}\n")
-
-        self.result_text.insert(tk.END, "=" * 80 + "\n\n")
 
     def display_ground_routes(self, result):
         self.result_text.insert(tk.END, "\nGround Transport Routes:\n")
@@ -876,16 +851,68 @@ class MainWindow(tk.Tk):
 
         self.result_text.insert(tk.END, "Flight Details:\n")
 
+        self.result_text.insert(tk.END, "=" * 80 + "\n")
+
         self.result_text.insert(tk.END, f"Home Team: {home_team} (Airport: {get_team_airport(home_team)})\n")
 
         self.result_text.insert(tk.END, f"Away Team: {away_team} (Airport: {get_team_airport(away_team)})\n")
 
-        self.result_text.insert(tk.END, f"Distance: {result.distance_km:.2f} km")  # Changed from miles to km
+        self.result_text.insert(tk.END, f"Distance: {result.distance_km:.1f} km\n")
 
-        if self.round_trip_var.get():
-            self.result_text.insert(tk.END, " (round trip)")
+        self.result_text.insert(tk.END, f"Flight Type: {result.flight_type}\n")
 
-        self.result_text.insert(tk.END, f"\nPassengers: {self.passengers_entry.get()}\n")
+        self.result_text.insert(tk.END, f"Round Trip: {'Yes' if result.is_round_trip else 'No'}\n\n")
+
+        # Emissions Section
+
+        self.result_text.insert(tk.END, "Emissions Results:\n")
+
+        self.result_text.insert(tk.END, "=" * 80 + "\n")
+
+        self.result_text.insert(tk.END, f"Total CO2 Emissions: {result.total_emissions:.2f} metric tons\n")
+
+        self.result_text.insert(tk.END, f"CO2 per Passenger: {result.per_passenger:.2f} metric tons\n\n")
+
+        # Environmental Equivalencies Section
+
+        self.result_text.insert(tk.END, "Environmental Impact Equivalencies:\n")
+
+        self.result_text.insert(tk.END, "=" * 80 + "\n")
+
+        # Calculate equivalencies
+
+        equivalencies = calculate_equivalencies(result.total_emissions)
+
+        # Display equivalencies with formatted descriptions
+
+        equiv_descriptions = {
+
+            'tree_years': "Number of tree seedlings grown for 10 years",
+
+            'car_miles': "Miles driven by an average passenger vehicle",
+
+            'phone_charges': "Smartphones charged",
+
+            'led_hours': "Hours of LED bulb operation",
+
+            'garbage_bags': "Bags of waste recycled instead of landfilled",
+
+            'gas_gallons': "Gallons of gasoline consumed",
+
+            'coal_pounds': "Pounds of coal burned"
+
+        }
+
+        # Format and display each equivalency
+
+        for key, value in equivalencies.items():
+            description = equiv_descriptions[key]
+
+            formatted_value = f"{value:,.1f}"  # Format with comma separators and 1 decimal place
+
+            self.result_text.insert(tk.END, f"{description}: {formatted_value}\n")
+
+        self.result_text.insert(tk.END, "\n")
 
 
 

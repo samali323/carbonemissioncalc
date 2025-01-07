@@ -1,11 +1,17 @@
 import math
 from typing import Dict, Optional
+
+import self
+
 from src.config.constants import (
     KM_PER_MILE,
     TRANSPORT_MODES,
     EMISSION_FACTORS,
     AIRCRAFT_EMISSION_FACTORS
 )
+from src.data.team_data import get_airport_coordinates, get_team_airport
+
+from src.models.icao_calculator import ICAOEmissionsCalculator
 
 
 def calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -35,39 +41,116 @@ def determine_mileage_type(distance_km: float) -> str:
 
 
 def calculate_transport_emissions(
+
         mode: str,
+
         distance_km: float,
+
         passengers: int = 30,
-        is_round_trip: bool = False
+
+        is_round_trip: bool = False,
+
+        home_team: str = None,
+
+        away_team: str = None
+
 ) -> float:
+
     """Calculate emissions for different transport modes."""
+
     if distance_km == 0:
+
         return 0.0
 
-    # Calculate one-way distance if round trip
-    one_way_distance = distance_km / 2 if is_round_trip else distance_km
 
     if mode == 'air':
-        flight_type = determine_mileage_type(one_way_distance)
-        if flight_type == "Short":
-            emissions_factor = EMISSION_FACTORS['ShortBusiness']
-        elif flight_type == "Medium":
-            emissions_factor = EMISSION_FACTORS['MediumBusiness']
-        else:
-            emissions_factor = EMISSION_FACTORS['LongBusiness']
 
-        total_emissions = (one_way_distance * emissions_factor * passengers) / 1000
+        # Get airport codes for both teams
+
+        home_airport = get_team_airport(home_team)
+
+        away_airport = get_team_airport(away_team)
+
+
+        # Get coordinates for both airports
+
+        home_coords = get_airport_coordinates(home_airport)
+
+        away_coords = get_airport_coordinates(away_airport)
+
+
+        if home_coords and away_coords:
+
+            # Create ICAO calculator instance
+
+            calculator = ICAOEmissionsCalculator()
+
+
+            # Calculate using ICAO method
+
+            result = calculator.calculate_flight_emissions(
+
+                origin_lat=home_coords['lat'],
+
+                origin_lon=home_coords['lon'],
+
+                dest_lat=away_coords['lat'],
+
+                dest_lon=away_coords['lon'],
+
+                passengers=passengers,
+
+                is_round_trip=is_round_trip
+
+            )
+
+            return result.total_emissions
+
+        else:
+
+            # Fallback to simplified calculation if coordinates not found
+
+            flight_type = determine_mileage_type(distance_km)
+
+            if flight_type == "Short":
+
+                emissions_factor = EMISSION_FACTORS['ShortBusiness']
+
+            elif flight_type == "Medium":
+
+                emissions_factor = EMISSION_FACTORS['MediumBusiness']
+
+            else:
+
+                emissions_factor = EMISSION_FACTORS['LongBusiness']
+
+
+            total_emissions = (distance_km * emissions_factor * passengers) / 1000
+
+            if is_round_trip:
+
+                total_emissions *= 2
+
+            return total_emissions
+
+
     elif mode in ['rail', 'bus']:
+
         mode_config = TRANSPORT_MODES[mode]
-        adjusted_distance = one_way_distance * mode_config['distance_multiplier']
+
+        adjusted_distance = distance_km * mode_config['distance_multiplier']
+
         emissions_per_passenger_km = mode_config['co2_per_km']
+
         total_emissions = (adjusted_distance * emissions_per_passenger_km * passengers) / 1000
 
-    # Double emissions for round trip
-    if is_round_trip:
-        total_emissions *= 2
 
-    return total_emissions
+        if is_round_trip:
+
+            total_emissions *= 2
+
+
+        return total_emissions
 
 
 def calculate_equivalencies(emissions_mtco2: float) -> Dict[str, float]:
