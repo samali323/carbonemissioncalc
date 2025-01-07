@@ -9,11 +9,13 @@ from tkinter import ttk, messagebox, filedialog
 import pandas as pd
 import self
 
-from src.config.constants import DEFAULT_PASSENGERS, EMISSION_FACTORS, TRANSPORT_MODES
+from src.config.constants import DEFAULT_PASSENGERS, EMISSION_FACTORS, TRANSPORT_MODES, CARBON_PRICE, \
+    ALTERNATIVE_TRANSPORT_PREMIUM, SOCIAL_CARBON_COST, TEAM_COUNTRIES, SOCIAL_CARBON_COSTS, CARBON_PRICES_EUR, \
+    EU_ETS_PRICE
 from src.data.team_data import get_team_airport, get_airport_coordinates
 from src.gui.widgets.auto_complete import TeamAutoComplete, CompetitionAutoComplete
 from src.models.emissions import EmissionsCalculator
-from src.utils.calculations import calculate_transport_emissions, calculate_equivalencies
+from src.utils.calculations import calculate_transport_emissions, calculate_equivalencies, get_carbon_price
 from src.models.emissions import EmissionsResult
 from src.utils.calculations import calculate_distance, determine_mileage_type
 from src.models.icao_calculator import ICAOEmissionsCalculator
@@ -179,96 +181,97 @@ class MainWindow(tk.Tk):
         self.calculator_tab.columnconfigure(1, weight=1)
         self.calculator_tab.rowconfigure(0, weight=1)
 
-    def add_transport_comparison(self):
-
-        transport_frame = ttk.LabelFrame(self.calculator_tab, text="Transport Alternatives", padding="10")
-
-        transport_frame.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E), padx=10, pady=10)
-
-        self.transport_tree = ttk.Treeview(
-
-            transport_frame,
-
-            columns=("Mode", "Duration", "Distance", "CO2", "CO2 Saved", "Route", "Route Factor"),
-
-            show='headings',
-
-            height=3
-
-        )
-
-        columns = {
-
-            "Mode": ("Transport Mode", 100),
-
-            "Distance": ("Distance (km)", 100),  # Changed from miles to km
-
-            "CO2": ("CO2 (tons)", 100),
-
-            "CO2 Saved": ("CO2 Saved (tons)", 120),
-
-            "Route": ("Route Description", 200),
-
-            "Route Factor": ("Route Factor", 100)
-
-        }
-
-        for col, (heading, width) in columns.items():
-            self.transport_tree.heading(col, text=heading, anchor='center')
-
-            self.transport_tree.column(col, width=width, anchor='center')
-
-        self.transport_tree.pack(fill='x', expand=True)
-
     def update_transport_comparison(self, result):
+        """Update transport mode comparison with comprehensive SCC analysis"""
+        # Get away team's country and corresponding carbon price
+        away_team = self.away_team_entry.get()
+        away_country = TEAM_COUNTRIES.get(away_team, 'EU')  # Default to EU if country not found
+        carbon_price = CARBON_PRICES_EUR.get(away_country, EU_ETS_PRICE)  # Use EU ETS price as default
+
         self.result_text.insert(tk.END, "\nTransport Mode Comparison:\n")
         self.result_text.insert(tk.END, "=" * 80 + "\n")
+
+        # Display mode comparison header
         self.result_text.insert(tk.END,
                                 f"{'Mode':20}  {'Distance (km)':15} {'CO2 (metric tons)':15} {'CO2 Saved':15}\n")
         self.result_text.insert(tk.END, "-" * 80 + "\n")
 
-        # Get team names from the entries
-        home_team = self.home_team_entry.get()
-        away_team = self.away_team_entry.get()
-        is_round_trip = self.round_trip_var.get()
-        passengers = int(self.passengers_entry.get())
+        # Calculate emissions for each mode
+        air_emissions = result.total_emissions
+        base_distance = result.distance_km
 
-        # Use the emissions from the flight calculation result directly
-        air_emissions = result.total_emissions  # This already includes round trip if applicable
-        base_distance = result.distance_km  # This already includes round trip if applicable
+        rail_distance = (base_distance / (2 if self.round_trip_var.get() else 1)) * TRANSPORT_MODES['rail'][
+            'distance_multiplier']
+        bus_distance = (base_distance / (2 if self.round_trip_var.get() else 1)) * TRANSPORT_MODES['bus'][
+            'distance_multiplier']
 
-        # Calculate rail and bus emissions using the base distance
-        rail_distance = (base_distance / (2 if is_round_trip else 1)) * TRANSPORT_MODES['rail']['distance_multiplier']
-        bus_distance = (base_distance / (2 if is_round_trip else 1)) * TRANSPORT_MODES['bus']['distance_multiplier']
+        rail_emissions = calculate_transport_emissions('rail', rail_distance * (2 if self.round_trip_var.get() else 1),
+                                                       int(self.passengers_entry.get()), self.round_trip_var.get())
+        bus_emissions = calculate_transport_emissions('bus', bus_distance * (2 if self.round_trip_var.get() else 1),
+                                                      int(self.passengers_entry.get()), self.round_trip_var.get())
 
-        # Calculate emissions for alternative modes
-        rail_emissions = calculate_transport_emissions(
-            'rail',
-            rail_distance * (2 if is_round_trip else 1),
-            passengers,
-            is_round_trip=is_round_trip
-        )
-        bus_emissions = calculate_transport_emissions(
-            'bus',
-            bus_distance * (2 if is_round_trip else 1),
-            passengers,
-            is_round_trip=is_round_trip
-        )
-
-        # Display results
+        # Display basic comparison
         self.result_text.insert(tk.END,
                                 f"{'Air':20}  {base_distance:15.1f} {air_emissions:15.2f} {'N/A':15}\n")
         self.result_text.insert(tk.END,
-                                f"{'Rail':20}  {rail_distance * (2 if is_round_trip else 1):15.1f} {rail_emissions:15.2f} {air_emissions - rail_emissions:15.2f}\n")
+                                f"{'Rail':20}  {rail_distance * (2 if self.round_trip_var.get() else 1):15.1f} {rail_emissions:15.2f} {air_emissions - rail_emissions:15.2f}\n")
         self.result_text.insert(tk.END,
-                                f"{'Bus':20}  {bus_distance * (2 if is_round_trip else 1):15.1f} {bus_emissions:15.2f} {air_emissions - bus_emissions:15.2f}\n")
-    def display_ground_routes(self, result):
-        self.result_text.insert(tk.END, "\nGround Transport Routes:\n")
-        self.result_text.insert(tk.END,
-                                f"Rail: Southern European Rail Network (Distance factor: {TRANSPORT_MODES['rail']['distance_multiplier']:.2f})\n")
-        self.result_text.insert(tk.END,
-                                f"Bus: Southern European Bus Network (Distance factor: {TRANSPORT_MODES['bus']['distance_multiplier']:.2f})\n\n")
+                                f"{'Bus':20}  {bus_distance * (2 if self.round_trip_var.get() else 1):15.1f} {bus_emissions:15.2f} {air_emissions - bus_emissions:15.2f}\n")
 
+        # Add Carbon Price Analysis section
+        self.result_text.insert(tk.END, f"\nCarbon Price Analysis ({away_country}):\n")
+        self.result_text.insert(tk.END, "=" * 80 + "\n")
+        self.result_text.insert(tk.END, f"Carbon Price: €{carbon_price:.2f}/tCO2\n\n")
+
+        # Calculate and display carbon costs for each mode
+        modes = {
+            'Air': air_emissions,
+            'Rail': rail_emissions,
+            'Bus': bus_emissions
+        }
+
+        for mode, emissions in modes.items():
+            cost = emissions * carbon_price
+            self.result_text.insert(tk.END, f"{mode}: €{cost:.2f}\n")
+
+        # Add Social Cost Analysis section
+        self.result_text.insert(tk.END, "\nSocial Cost Analysis:\n")
+        self.result_text.insert(tk.END, "=" * 80 + "\n")
+
+        # Header for the detailed social cost table
+        self.result_text.insert(tk.END,
+                                f"{'Transport Mode':<15} | {'Cost Type':<15} | {'Low (€)':<12} | {'Median (€)':<12} | {'Mean (€)':<12} | {'High (€)':<12}\n")
+        self.result_text.insert(tk.END, "-" * 85 + "\n")
+
+        # Calculate and display social costs for each mode
+        for mode, emissions in modes.items():
+            # Calculate costs using different SCC estimates
+            synthetic_low = emissions * SOCIAL_CARBON_COSTS['synthetic_iqr_low']
+            synthetic_median = emissions * SOCIAL_CARBON_COSTS['synthetic_median']
+            synthetic_mean = emissions * SOCIAL_CARBON_COSTS['synthetic_mean']
+            synthetic_high = emissions * SOCIAL_CARBON_COSTS['synthetic_iqr_high']
+            epa = emissions * SOCIAL_CARBON_COSTS['epa_median']
+            iwg = emissions * SOCIAL_CARBON_COSTS['iwg_75th']
+
+            # Display synthetic costs
+            self.result_text.insert(tk.END,
+                                    f"{mode:<15} | {'Synthetic':<15} | €{synthetic_low:<11.2f} | €{synthetic_median:<11.2f} | €{synthetic_mean:<11.2f} | €{synthetic_high:<11.2f}\n")
+
+            # Display government estimates
+            self.result_text.insert(tk.END,
+                                    f"{'':<15} | {'EPA':<15} | {'':<12} | €{epa:<11.2f} | {'':<12} | {'':<12}\n")
+            self.result_text.insert(tk.END,
+                                    f"{'':<15} | {'IWG':<15} | {'':<12} | €{iwg:<11.2f} | {'':<12} | {'':<12}\n")
+
+            if mode != list(modes.keys())[-1]:  # Add separator between modes
+                self.result_text.insert(tk.END, "-" * 85 + "\n")
+
+        # Add explanatory notes
+        self.result_text.insert(tk.END, "\nNotes:\n")
+        self.result_text.insert(tk.END,
+                                f"- Carbon costs are based on {away_country}'s carbon price of €{carbon_price:.2f}/tCO2\n")
+        self.result_text.insert(tk.END, "- Social costs use the synthetic distribution as recommended\n")
+        self.result_text.insert(tk.END, "- All costs are in EUR\n")
 
     def _calculate_air_route_factor(self, distance_km: float) -> float:
 

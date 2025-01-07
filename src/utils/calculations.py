@@ -7,7 +7,7 @@ from src.config.constants import (
     KM_PER_MILE,
     TRANSPORT_MODES,
     EMISSION_FACTORS,
-    AIRCRAFT_EMISSION_FACTORS
+    AIRCRAFT_EMISSION_FACTORS, TEAM_COUNTRIES, DEFAULT_CARBON_PRICE, EU_ETS_PRICE, CARBON_PRICES_EUR, EUR_TO_GBP
 )
 from src.data.team_data import get_airport_coordinates, get_team_airport
 
@@ -126,14 +126,69 @@ def calculate_transport_emissions(
             total_emissions *= 2
 
         return total_emissions
+
+
+def get_carbon_price(away_team: str, home_team: str) -> float:
+    """
+    Get carbon price based on away team's country.
+    Returns price in EUR or GBP for UK teams.
+    """
+    away_country = TEAM_COUNTRIES.get(away_team)
+    home_country = TEAM_COUNTRIES.get(home_team)
+
+    if not away_country:
+        return DEFAULT_CARBON_PRICE
+
+    # Get base price in EUR
+    price_eur = CARBON_PRICES_EUR.get(away_country, EU_ETS_PRICE)
+
+    # Convert to GBP if home team is from UK
+    if home_country == 'GB':
+        return price_eur * EUR_TO_GBP
+
+    return price_eur
+
+
 def calculate_equivalencies(emissions_mtco2: float) -> Dict[str, float]:
-    """Calculate environmental equivalencies for given CO2 emissions."""
+    """
+    Calculate environmental equivalencies for given CO2 emissions in metric tons.
+    Based on EPA conversion factors.
+    """
     return {
-        'tree_years': emissions_mtco2 * 17.31,  # Trees grown for 10 years
-        'car_miles': emissions_mtco2 * 2557.69,  # Miles driven by average car
-        'phone_charges': emissions_mtco2 * 66019.23,  # Smartphones charged
-        'led_hours': emissions_mtco2 * 289215.38,  # Hours of LED bulb use
-        'garbage_bags': emissions_mtco2 * 42.31,  # Bags of waste recycled
-        'gas_gallons': emissions_mtco2 * 113.46,  # Gallons of gasoline
-        'coal_pounds': emissions_mtco2 * (1 / 9.07e-4)  # Pounds of coal
+        # Vehicle emissions
+        'gasoline_vehicles_year': emissions_mtco2 / 0.233,  # Gasoline vehicles driven for one year
+        'electric_vehicles_year': emissions_mtco2 / 0.883,  # Electric vehicles driven for one year
+        'gasoline_vehicle_miles': emissions_mtco2 * 2547,  # Miles driven by gasoline vehicle
+
+        # Fuel consumption
+        'gasoline_gallons': emissions_mtco2 * 113,  # Gallons of gasoline
+        'diesel_gallons': emissions_mtco2 * 98.2,  # Gallons of diesel
+        'propane_cylinders': emissions_mtco2 * 45.9,  # Propane cylinders for BBQ
+        'oil_barrels': emissions_mtco2 * 2.3,  # Barrels of oil
+
+        # Home energy use
+        'homes_energy_year': emissions_mtco2 / 0.134,  # Homes' energy use for one year
+        'homes_electricity_year': emissions_mtco2 / 0.208,  # Homes' electricity use for one year
+
+        # Industrial measures
+        'coal_pounds': emissions_mtco2 * 1111,  # Pounds of coal burned
+        'coal_railcars': emissions_mtco2 * 0.006,  # Railcars of coal
+        'tanker_trucks': emissions_mtco2 * 0.013,  # Tanker trucks of gasoline
+
+        # Waste and recycling
+        'waste_tons_recycled': emissions_mtco2 * 0.353,  # Tons of waste recycled vs landfilled
+        'garbage_trucks_recycled': emissions_mtco2 * 0.05,  # Garbage trucks of waste recycled
+        'trash_bags_recycled': emissions_mtco2 * 85,  # Trash bags of waste recycled
+
+        # Renewable energy
+        'wind_turbines_year': emissions_mtco2 * 0.0003,  # Wind turbines running for a year
+
+        # Carbon sequestration
+        'tree_seedlings_10years': emissions_mtco2 * 16.5,  # Tree seedlings grown for 10 years
+        'forest_acres_year': emissions_mtco2 * 1.0,  # Acres of U.S. forests in one year
+        'forest_preserved_acres': emissions_mtco2 * 0.006,  # Acres of U.S. forests preserved
+
+        # Electronic devices
+        'smartphones_charged': emissions_mtco2 * 80847  # Number of smartphones charged
     }
+
