@@ -212,7 +212,7 @@ class MainWindow(tk.Tk):
 
         # Display basic comparison
         self.result_text.insert(tk.END,
-                                f"{'Air':20}  {base_distance:15.1f} {air_emissions:15.2f} {'N/A':15}\n")
+                                f"{'Air':20}  {base_distance:15.1f} {air_emissions:15.2f} {'':15}\n")
         self.result_text.insert(tk.END,
                                 f"{'Rail':20}  {rail_distance * (2 if self.round_trip_var.get() else 1):15.1f} {rail_emissions:15.2f} {air_emissions - rail_emissions:15.2f}\n")
         self.result_text.insert(tk.END,
@@ -1010,78 +1010,83 @@ class MainWindow(tk.Tk):
             self.copy_error_button.config(state='normal')
 
     def display_results(self, result, home_team, away_team):
-
         # Clear previous results
-
         self.result_text.delete(1.0, tk.END)
 
+        # Header
+        self.result_text.insert(tk.END, "✈️ Flight Emissions Report ✈️\n")
+        self.result_text.insert(tk.END, "=" * 80 + "\n\n")
+
         # Flight Details Section
-
-        self.result_text.insert(tk.END, "Flight Details:\n")
-
-        self.result_text.insert(tk.END, "=" * 80 + "\n")
-
-        self.result_text.insert(tk.END, f"Home Team: {home_team} (Airport: {get_team_airport(home_team)})\n")
-
-        self.result_text.insert(tk.END, f"Away Team: {away_team} (Airport: {get_team_airport(away_team)})\n")
-
-        self.result_text.insert(tk.END, f"Distance: {result.distance_km:.1f} km\n")
-
-        self.result_text.insert(tk.END, f"Flight Type: {result.flight_type}\n")
-
-        self.result_text.insert(tk.END, f"Round Trip: {'Yes' if result.is_round_trip else 'No'}\n\n")
+        self.result_text.insert(tk.END, "🛫 Flight Details\n")
+        self.result_text.insert(tk.END, "-" * 40 + "\n")
+        self.result_text.insert(tk.END, f"🏠 Home Team: {home_team} \n    Airport: {get_team_airport(home_team)}\n")
+        self.result_text.insert(tk.END, f"🏃 Away Team: {away_team} \n    Airport: {get_team_airport(away_team)}\n")
+        self.result_text.insert(tk.END, f"📏 Distance: {result.distance_km:,.1f} km\n")
+        self.result_text.insert(tk.END, f"✈️ Flight Type: {result.flight_type}\n")
+        self.result_text.insert(tk.END, f"🔄 Round Trip: {'Yes ↔️' if result.is_round_trip else 'No →'}\n\n")
 
         # Emissions Section
-
-        self.result_text.insert(tk.END, "Emissions Results:\n")
-
-        self.result_text.insert(tk.END, "=" * 80 + "\n")
-
-        self.result_text.insert(tk.END, f"Total CO2 Emissions: {result.total_emissions:.2f} metric tons\n")
-
-        self.result_text.insert(tk.END, f"CO2 per Passenger: {result.per_passenger:.2f} metric tons\n\n")
+        self.result_text.insert(tk.END, "🌡️ Emissions Results\n")
+        self.result_text.insert(tk.END, "-" * 40 + "\n")
+        self.result_text.insert(tk.END, f"📊 Total CO2: {result.total_emissions:,.2f} metric tons\n")
+        self.result_text.insert(tk.END, f"👤 Per Passenger: {result.per_passenger:,.2f} metric tons\n\n")
 
         # Environmental Equivalencies Section
-
-        self.result_text.insert(tk.END, "Environmental Impact Equivalencies:\n")
-
-        self.result_text.insert(tk.END, "=" * 80 + "\n")
+        self.result_text.insert(tk.END, "🌍 Environmental Impact Equivalencies\n")
+        self.result_text.insert(tk.END, "-" * 40 + "\n")
 
         # Calculate equivalencies
-
         equivalencies = calculate_equivalencies(result.total_emissions)
 
-        # Display equivalencies with formatted descriptions
-
-        equiv_descriptions = {
-
-            'tree_years': "Number of tree seedlings grown for 10 years",
-
-            'car_miles': "Miles driven by an average passenger vehicle",
-
-            'phone_charges': "Smartphones charged",
-
-            'led_hours': "Hours of LED bulb operation",
-
-            'garbage_bags': "Bags of waste recycled instead of landfilled",
-
-            'gas_gallons': "Gallons of gasoline consumed",
-
-            'coal_pounds': "Pounds of coal burned"
-
+        # Organize equivalencies by category
+        categories = {
+            "🚗 Transportation Impact": {
+                'gasoline_vehicles_year': "Gasoline vehicles driven for one year",
+                'electric_vehicles_year': "Electric vehicles driven for one year",
+                'gasoline_vehicle_miles': "Miles driven by gasoline vehicle"
+            },
+            "⚡ Energy Usage": {
+                'homes_energy_year': "Homes' energy use for one year",
+                'homes_electricity_year': "Homes' electricity use for one year",
+                'smartphones_charged': "Smartphones charged"
+            },
+            "🌳 Environmental Offset": {
+                'tree_seedlings_10years': "Tree seedlings grown for 10 years",
+                'forest_acres_year': "Acres of U.S. forests in one year",
+                'forest_preserved_acres': "Acres of U.S. forests preserved"
+            },
+            "♻️ Waste & Resources": {
+                'waste_tons_recycled': "Tons of waste recycled",
+                'garbage_trucks_recycled': "Garbage trucks of waste recycled",
+                'trash_bags_recycled': "Trash bags of waste recycled"
+            },
+            "⛽ Fuel Equivalents": {
+                'gasoline_gallons': "Gallons of gasoline",
+                'diesel_gallons': "Gallons of diesel",
+                'propane_cylinders': "Propane cylinders for BBQ",
+                'oil_barrels': "Barrels of oil"
+            }
         }
 
-        # Format and display each equivalency
+        # Display equivalencies by category
+        for category, items in categories.items():
+            self.result_text.insert(tk.END, f"\n{category}\n")
+            self.result_text.insert(tk.END, "-" * 30 + "\n")
+            for key, description in items.items():
+                if key in equivalencies:
+                    value = equivalencies[key]
+                    formatted_value = f"{value:,.2f}"
+                    self.result_text.insert(tk.END, f"  • {formatted_value} {description}\n")
 
-        for key, value in equivalencies.items():
-            description = equiv_descriptions[key]
+        # Footer
+        self.result_text.insert(tk.END, "\n" + "=" * 80 + "\n")
+        self.result_text.insert(tk.END, "💡 This report helps visualize the environmental impact of the flight\n")
+        self.result_text.insert(tk.END, "🌱 Consider sustainable alternatives when possible\n")
 
-            formatted_value = f"{value:,.1f}"  # Format with comma separators and 1 decimal place
-
-            self.result_text.insert(tk.END, f"{description}: {formatted_value}\n")
-
-        self.result_text.insert(tk.END, "\n")
-
+        # Enable export button if it exists
+        if hasattr(self, 'export_button'):
+            self.export_button.config(state='normal')
 
 
     def export_to_csv(self):
