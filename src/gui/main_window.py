@@ -19,6 +19,9 @@ from src.utils.calculations import calculate_transport_emissions, calculate_equi
 from src.models.emissions import EmissionsResult
 from src.utils.calculations import calculate_distance, determine_mileage_type
 from src.models.icao_calculator import ICAOEmissionsCalculator
+from src.gui.theme import COLORS
+# Color scheme
+
 
 class MainWindow(tk.Tk):
     def __init__(self):
@@ -26,6 +29,59 @@ class MainWindow(tk.Tk):
 
         self.title("Football Team Flight Emissions Calculator")
         self.geometry("1200x800")
+        # Configure color scheme
+
+        self.title("Football Team Flight Emissions Calculator")
+
+        self.geometry("1200x800")
+
+        # Configure the root window background
+
+        self.configure(bg=COLORS['bg_primary'])
+
+        # Configure styles
+
+        style = ttk.Style()
+
+        style.configure('TFrame', background=COLORS['bg_primary'])
+
+        style.configure('TLabelframe', background=COLORS['bg_primary'])
+
+        style.configure('TLabel', background=COLORS['bg_primary'], foreground=COLORS['text_primary'])
+
+        style.configure('TButton', background=COLORS['accent'])
+
+        style.configure('Custom.TEntry', fieldbackground=COLORS['entry_bg'])
+
+        # Configure text widget style
+
+        self.option_add('*Text*Background', COLORS['bg_secondary'])
+
+        self.option_add('*Text*foreground', COLORS['text_primary'])
+
+        # Update Treeview style
+
+        style.configure(
+
+            "Treeview",
+
+            background=COLORS['bg_secondary'],
+
+            fieldbackground=COLORS['bg_secondary'],
+
+            foreground=COLORS['text_primary']
+
+        )
+
+        style.configure(
+
+            "Treeview.Heading",
+
+            background=COLORS['accent'],
+
+            foreground=COLORS['text_primary']
+
+        )
 
         # Initialize calculator and data storage
         self.calculator = EmissionsCalculator()
@@ -170,11 +226,29 @@ class MainWindow(tk.Tk):
         right_frame.grid(row=0, column=1, sticky=(tk.W, tk.E, tk.N, tk.S))
 
         # Results text
-        self.result_text = tk.Text(right_frame, wrap=tk.WORD, height=30)
-        scrollbar = ttk.Scrollbar(right_frame, orient="vertical", command=self.result_text.yview)
-        self.result_text.configure(yscrollcommand=scrollbar.set)
+        self.result_text = tk.Text(
 
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+            right_frame,
+
+            wrap=tk.WORD,
+
+            height=30,
+
+            bg=COLORS['bg_secondary'],
+
+            fg=COLORS['text_primary'],
+
+            font=('Segoe UI', 10),
+
+            relief='solid',
+
+            borderwidth=1,
+
+            padx=10,
+
+            pady=10
+
+        )
         self.result_text.pack(fill='both', expand=True)
 
         # Configure grid weights
@@ -183,18 +257,9 @@ class MainWindow(tk.Tk):
 
     def update_transport_comparison(self, result):
         """Update transport mode comparison with comprehensive SCC analysis"""
-        # Get away team's country and corresponding carbon price
         away_team = self.away_team_entry.get()
-        away_country = TEAM_COUNTRIES.get(away_team, 'EU')  # Default to EU if country not found
-        carbon_price = CARBON_PRICES_EUR.get(away_country, EU_ETS_PRICE)  # Use EU ETS price as default
-
-        self.result_text.insert(tk.END, "\nTransport Mode Comparison:\n")
-        self.result_text.insert(tk.END, "=" * 80 + "\n")
-
-        # Display mode comparison header
-        self.result_text.insert(tk.END,
-                                f"{'Mode':20}  {'Distance (km)':15} {'CO2 (metric tons)':15} {'CO2 Saved':15}\n")
-        self.result_text.insert(tk.END, "-" * 80 + "\n")
+        away_country = TEAM_COUNTRIES.get(away_team, 'EU')
+        carbon_price = CARBON_PRICES_EUR.get(away_country, EU_ETS_PRICE)
 
         # Calculate emissions for each mode
         air_emissions = result.total_emissions
@@ -205,73 +270,141 @@ class MainWindow(tk.Tk):
         bus_distance = (base_distance / (2 if self.round_trip_var.get() else 1)) * TRANSPORT_MODES['bus'][
             'distance_multiplier']
 
-        rail_emissions = calculate_transport_emissions('rail', rail_distance * (2 if self.round_trip_var.get() else 1),
-                                                       int(self.passengers_entry.get()), self.round_trip_var.get())
-        bus_emissions = calculate_transport_emissions('bus', bus_distance * (2 if self.round_trip_var.get() else 1),
-                                                      int(self.passengers_entry.get()), self.round_trip_var.get())
+        if self.round_trip_var.get():
+            rail_distance *= 2
+            bus_distance *= 2
 
-        # Display basic comparison
-        self.result_text.insert(tk.END,
-                                f"{'Air':20}  {base_distance:15.1f} {air_emissions:15.2f} {'':15}\n")
-        self.result_text.insert(tk.END,
-                                f"{'Rail':20}  {rail_distance * (2 if self.round_trip_var.get() else 1):15.1f} {rail_emissions:15.2f} {air_emissions - rail_emissions:15.2f}\n")
-        self.result_text.insert(tk.END,
-                                f"{'Bus':20}  {bus_distance * (2 if self.round_trip_var.get() else 1):15.1f} {bus_emissions:15.2f} {air_emissions - bus_emissions:15.2f}\n")
+        rail_emissions = calculate_transport_emissions('rail', rail_distance, int(self.passengers_entry.get()),
+                                                       self.round_trip_var.get())
+        bus_emissions = calculate_transport_emissions('bus', bus_distance, int(self.passengers_entry.get()),
+                                                      self.round_trip_var.get())
 
-        # Add Carbon Price Analysis section
+        # Transport Mode Comparison table
+        self.result_text.insert(tk.END, "\nTransport Mode Comparison:\n")
+        self.result_text.insert(tk.END, "=" * 70 + "\n")
+
+        # Column widths
+        mode_width = 15
+        dist_width = 15
+        co2_width = 15
+        saved_width = 15
+
+        # Header with vertical lines
+        header = (
+            f"| {'Mode':^{mode_width}} "
+            f"| {'Distance (km)':^{dist_width}} "
+            f"| {'CO2 (t)':^{co2_width}} "
+            f"| {'CO2 Saved (t)':^{saved_width}} |\n"
+        )
+        self.result_text.insert(tk.END, header)
+        self.result_text.insert(tk.END, "|" + "-" * (mode_width + 2) + "|" + "-" * (dist_width + 2) +
+                                "|" + "-" * (co2_width + 2) + "|" + "-" * (saved_width + 2) + "|\n")
+
+        # Data rows with vertical lines
+        modes_data = [
+            ("Air", base_distance, air_emissions, None),
+            ("Rail", rail_distance, rail_emissions, air_emissions - rail_emissions),
+            ("Bus", bus_distance, bus_emissions, air_emissions - bus_emissions)
+        ]
+
+        for mode, dist, co2, saved in modes_data:
+            saved_str = f"{saved:^{saved_width}.2f}" if saved is not None else " " * saved_width
+            row = (
+                f"| {mode:^{mode_width}} "
+                f"| {dist:^{dist_width}.1f} "
+                f"| {co2:^{co2_width}.2f} "
+                f"| {saved_str} |\n"
+            )
+            self.result_text.insert(tk.END, row)
+
+        self.result_text.insert(tk.END, "=" * 70 + "\n")
+
+        # Carbon Price Analysis with vertical lines
         self.result_text.insert(tk.END, f"\nCarbon Price Analysis ({away_country}):\n")
-        self.result_text.insert(tk.END, "=" * 80 + "\n")
+        self.result_text.insert(tk.END, "=" * 70 + "\n")
         self.result_text.insert(tk.END, f"Carbon Price: €{carbon_price:.2f}/tCO2\n\n")
 
-        # Calculate and display carbon costs for each mode
-        modes = {
-            'Air': air_emissions,
-            'Rail': rail_emissions,
-            'Bus': bus_emissions
-        }
+        # Carbon costs table with vertical lines
+        mode_width = 20
+        cost_width = 20
 
-        for mode, emissions in modes.items():
+        for mode, emissions in [("Air", air_emissions), ("Rail", rail_emissions), ("Bus", bus_emissions)]:
             cost = emissions * carbon_price
-            self.result_text.insert(tk.END, f"{mode}: €{cost:.2f}\n")
+            row = f"| {mode:^{mode_width}} | €{cost:^{cost_width}.2f} |\n"
+            self.result_text.insert(tk.END, row)
 
-        # Add Social Cost Analysis section
+        # Social Cost Analysis with vertical lines
         self.result_text.insert(tk.END, "\nSocial Cost Analysis:\n")
-        self.result_text.insert(tk.END, "=" * 80 + "\n")
+        self.result_text.insert(tk.END, "=" * 70 + "\n")
 
-        # Header for the detailed social cost table
-        self.result_text.insert(tk.END,
-                                f"{'Transport Mode':<15} | {'Cost Type':<15} | {'Low (€)':<12} | {'Median (€)':<12} | {'Mean (€)':<12} | {'High (€)':<12}\n")
-        self.result_text.insert(tk.END, "-" * 85 + "\n")
+        # Column widths for social cost table
+        mode_col = 12
+        type_col = 12
+        cost_col = 10
 
-        # Calculate and display social costs for each mode
-        for mode, emissions in modes.items():
-            # Calculate costs using different SCC estimates
-            synthetic_low = emissions * SOCIAL_CARBON_COSTS['synthetic_iqr_low']
-            synthetic_median = emissions * SOCIAL_CARBON_COSTS['synthetic_median']
-            synthetic_mean = emissions * SOCIAL_CARBON_COSTS['synthetic_mean']
-            synthetic_high = emissions * SOCIAL_CARBON_COSTS['synthetic_iqr_high']
-            epa = emissions * SOCIAL_CARBON_COSTS['epa_median']
-            iwg = emissions * SOCIAL_CARBON_COSTS['iwg_75th']
+        # Header with vertical lines
+        header = (
+            f"| {'Mode':^{mode_col}} "
+            f"| {'Cost Type':^{type_col}} "
+            f"| {'Low':^{cost_col}} "
+            f"| {'Median':^{cost_col}} "
+            f"| {'Mean':^{cost_col}} "
+            f"| {'High':^{cost_col}} |\n"
+        )
+        self.result_text.insert(tk.END, header)
+        self.result_text.insert(tk.END, "|" + "-" * (mode_col + 2) + "|" + "-" * (type_col + 2) +
+                                "|" + "-" * (cost_col + 2) + "|" + "-" * (cost_col + 2) +
+                                "|" + "-" * (cost_col + 2) + "|" + "-" * (cost_col + 2) + "|\n")
 
-            # Display synthetic costs
-            self.result_text.insert(tk.END,
-                                    f"{mode:<15} | {'Synthetic':<15} | €{synthetic_low:<11.2f} | €{synthetic_median:<11.2f} | €{synthetic_mean:<11.2f} | €{synthetic_high:<11.2f}\n")
+        # Social costs data with vertical lines
+        for mode, emissions in [("Air", air_emissions), ("Rail", rail_emissions), ("Bus", bus_emissions)]:
+            synthetic_costs = [
+                emissions * SOCIAL_CARBON_COSTS['synthetic_iqr_low'],
+                emissions * SOCIAL_CARBON_COSTS['synthetic_median'],
+                emissions * SOCIAL_CARBON_COSTS['synthetic_mean'],
+                emissions * SOCIAL_CARBON_COSTS['synthetic_iqr_high']
+            ]
 
-            # Display government estimates
-            self.result_text.insert(tk.END,
-                                    f"{'':<15} | {'EPA':<15} | {'':<12} | €{epa:<11.2f} | {'':<12} | {'':<12}\n")
-            self.result_text.insert(tk.END,
-                                    f"{'':<15} | {'IWG':<15} | {'':<12} | €{iwg:<11.2f} | {'':<12} | {'':<12}\n")
+            # Synthetic row
+            synth_row = (
+                f"| {mode:^{mode_col}} "
+                f"| {'Synthetic':^{type_col}} "
+                f"| €{synthetic_costs[0]:^{cost_col - 1}.0f} "
+                f"| €{synthetic_costs[1]:^{cost_col - 1}.0f} "
+                f"| €{synthetic_costs[2]:^{cost_col - 1}.0f} "
+                f"| €{synthetic_costs[3]:^{cost_col - 1}.0f} |\n"
+            )
+            self.result_text.insert(tk.END, synth_row)
 
-            if mode != list(modes.keys())[-1]:  # Add separator between modes
-                self.result_text.insert(tk.END, "-" * 85 + "\n")
+            # EPA and IWG rows
+            epa_cost = emissions * SOCIAL_CARBON_COSTS['epa_median']
+            iwg_cost = emissions * SOCIAL_CARBON_COSTS['iwg_75th']
 
-        # Add explanatory notes
-        self.result_text.insert(tk.END, "\nNotes:\n")
-        self.result_text.insert(tk.END,
-                                f"- Carbon costs are based on {away_country}'s carbon price of €{carbon_price:.2f}/tCO2\n")
-        self.result_text.insert(tk.END, "- Social costs use the synthetic distribution as recommended\n")
-        self.result_text.insert(tk.END, "- All costs are in EUR\n")
+            epa_row = (
+                f"| {' ':^{mode_col}} "
+                f"| {'EPA':^{type_col}} "
+                f"| {' ':^{cost_col}} "
+                f"| €{epa_cost:^{cost_col - 1}.0f} "
+                f"| {' ':^{cost_col}} "
+                f"| {' ':^{cost_col}} |\n"
+            )
+            iwg_row = (
+                f"| {' ':^{mode_col}} "
+                f"| {'IWG':^{type_col}} "
+                f"| {' ':^{cost_col}} "
+                f"| €{iwg_cost:^{cost_col - 1}.0f} "
+                f"| {' ':^{cost_col}} "
+                f"| {' ':^{cost_col}} |\n"
+            )
+
+            self.result_text.insert(tk.END, epa_row)
+            self.result_text.insert(tk.END, iwg_row)
+
+            if mode != "Bus":  # Don't add separator after last mode
+                self.result_text.insert(tk.END, "|" + "-" * (mode_col + 2) + "|" + "-" * (type_col + 2) +
+                                        "|" + "-" * (cost_col + 2) + "|" + "-" * (cost_col + 2) +
+                                        "|" + "-" * (cost_col + 2) + "|" + "-" * (cost_col + 2) + "|\n")
+
 
     def _calculate_air_route_factor(self, distance_km: float) -> float:
 
@@ -322,8 +455,37 @@ class MainWindow(tk.Tk):
         return TRANSPORT_MODES['bus']['co2_per_km']
 
         return TRANSPORT_MODES['bus']['co2_per_km']
+
     def create_analysis_tab(self):
         """Create enhanced analysis tab with sorting and filtering"""
+        # Configure Treeview styles
+        style = ttk.Style()
+
+        # Configure both treeviews with identical heading styles
+        for tree_type in ["Summary", "Match"]:
+            # Base treeview style
+            style.configure(
+                f"{tree_type}.Treeview",
+                background=COLORS['bg_secondary'],
+                foreground=COLORS['text_primary'],
+                fieldbackground=COLORS['bg_secondary']
+            )
+
+            # Heading style
+            style.configure(
+                f"{tree_type}.Treeview.Heading",
+                background=COLORS['accent'],
+                foreground=COLORS['bg_secondary'],
+                relief='flat'
+            )
+
+            # Add hover effect for headers
+            style.map(
+                f"{tree_type}.Treeview.Heading",
+                background=[('active', COLORS['accent_light'])]
+            )
+
+        # Create main container
         analysis_container = ttk.Frame(self.analysis_tab, padding="10")
         analysis_container.pack(fill='both', expand=True)
 
@@ -331,22 +493,26 @@ class MainWindow(tk.Tk):
         summary_frame = ttk.LabelFrame(analysis_container, text="Summary", padding="10")
         summary_frame.pack(fill='x', pady=(0, 10))
 
+        # Create summary tree
         self.summary_tree = ttk.Treeview(
             summary_frame,
             columns=("Competition", "Matches", "Total Emissions", "Average"),
             show='headings',
-            height=5
+            height=5,
+            style="Summary.Treeview"
         )
 
-        # Configure columns with sorting
+        # Configure summary columns with sorting
         for col in ["Competition", "Matches", "Total Emissions", "Average"]:
-            self.summary_tree.heading(col,
-                                      text=col,
-                                      anchor='center',
-                                      command=lambda c=col: self.sort_treeview(self.summary_tree, c, False)
-                                      )
+            self.summary_tree.heading(
+                col,
+                text=col,
+                anchor='center',
+                command=lambda c=col: self.sort_treeview(self.summary_tree, c, False)
+            )
             self.summary_tree.column(col, anchor='center')
 
+        # Add summary scrollbar
         summary_scroll = ttk.Scrollbar(summary_frame, orient="vertical", command=self.summary_tree.yview)
         self.summary_tree.configure(yscrollcommand=summary_scroll.set)
         self.summary_tree.pack(side='left', fill='x', expand=True)
@@ -389,45 +555,41 @@ class MainWindow(tk.Tk):
         for i in range(7):
             filter_frame.grid_columnconfigure(i, weight=1)
 
-        # Matches treeview
+        # Create matches tree
         self.matches_tree = ttk.Treeview(
-
             matches_frame,
-
-            columns=("Home Team", "Away Team", "Competition"),  # Removed Distance and Emissions
-
+            columns=("Home Team", "Away Team", "Competition"),
             show='headings',
-
-            height=15
-
+            height=15,
+            style="Match.Treeview"
         )
 
-        # Configure columns with sorting
+        # Configure alternating row colors
+        self.matches_tree.tag_configure('evenrow', background=COLORS['accent_light'])
+        self.matches_tree.tag_configure('oddrow', background=COLORS['bg_secondary'])
 
-        for col in ["Home Team", "Away Team", "Competition"]:  # Removed Distance and Emissions
-
-            self.matches_tree.heading(col,
-
-                                      text=col,
-
-                                      anchor='center',
-
-                                      command=lambda c=col: self.sort_treeview(self.matches_tree, c, False)
-
-                                      )
-
+        # Configure match columns with sorting
+        for col in ["Home Team", "Away Team", "Competition"]:
+            self.matches_tree.heading(
+                col,
+                text=col,
+                anchor='center',
+                command=lambda c=col: self.sort_treeview(self.matches_tree, c, False)
+            )
             self.matches_tree.column(col, anchor='center')
-        # Scrollbars
+
+        # Add matches scrollbars
         y_scroll = ttk.Scrollbar(matches_frame, orient="vertical", command=self.matches_tree.yview)
         x_scroll = ttk.Scrollbar(matches_frame, orient="horizontal", command=self.matches_tree.xview)
 
         self.matches_tree.configure(yscrollcommand=y_scroll.set, xscrollcommand=x_scroll.set)
 
+        # Pack matches components
         x_scroll.pack(side='bottom', fill='x')
         y_scroll.pack(side='right', fill='y')
         self.matches_tree.pack(fill='both', expand=True)
 
-        # Add bindings for match selection
+        # Add match selection bindings
         self.add_match_selection_bindings()
 
     def sort_treeview(self, tree, col, reverse):
@@ -713,161 +875,110 @@ class MainWindow(tk.Tk):
             return value
 
     def update_analysis_display(self):
-
         if self.matches_data is None:
             return
 
         self.summary_tree.delete(*self.summary_tree.get_children())
-
         self.matches_tree.delete(*self.matches_tree.get_children())
 
         try:
-
             total_matches = total_emissions = total_distance = 0
-
             matches_data = []
-
             competitions = self.matches_data.groupby('Competition')
 
+            # Configure styles for summary tree - use COLORS dictionary
+            style = ttk.Style()
+            style.configure(
+                "Summary.Treeview.Heading",
+                background=COLORS['accent'],  # Use accent color from COLORS
+                foreground=COLORS['text_primary'],  # Use text color from COLORS
+                relief='flat'
+            )
+
             for comp_name, group in competitions:
-
                 comp_emissions = comp_distance = 0
-
                 match_count = len(group)
 
                 for _, row in group.iterrows():
-
                     home_team = row['Home Team']
-
                     away_team = row['Away Team']
-
                     home_airport = get_team_airport(home_team)
-
                     away_airport = get_team_airport(away_team)
 
                     if home_airport and away_airport:
-
                         home_coords = get_airport_coordinates(home_airport)
-
                         away_coords = get_airport_coordinates(away_airport)
 
                         if home_coords and away_coords:
-
-                            # Calculate distance first
-
                             distance = calculate_distance(
-
                                 home_coords['lat'], home_coords['lon'],
-
                                 away_coords['lat'], away_coords['lon']
-
                             )
 
-                            # Skip matches with 0.0 km distance
-
                             if distance == 0.0:
-                                match_count -= 1  # Reduce match count for zero distance matches
-
+                                match_count -= 1
                                 continue
 
                             result = self.calculator.calculate_flight_emissions(
-
                                 home_coords['lat'], home_coords['lon'],
-
                                 away_coords['lat'], away_coords['lon'],
-
                                 passengers=30,
-
                                 is_round_trip=True
-
                             )
 
                             comp_emissions += result.total_emissions
-
                             comp_distance += result.distance_km
-
                             total_emissions += result.total_emissions
-
                             total_distance += result.distance_km
-
                             total_matches += 1
 
                             matches_data.append({
-
                                 'home_team': home_team,
-
                                 'away_team': away_team,
-
                                 'competition': comp_name,
-
                             })
-
-                # Only add competition summary if there are valid matches
 
                 if match_count > 0:
                     avg_emissions = comp_emissions / match_count
-
                     self.summary_tree.insert('', 'end', values=(
-
                         comp_name,
-
                         self.format_number(match_count),
-
                         self.format_number(comp_emissions),
-
                         self.format_number(avg_emissions)
-
                     ))
-
-            # Add total row only if there are valid matches
 
             if total_matches > 0:
                 self.summary_tree.insert('', 'end', values=(
-
                     "TOTAL",
-
                     self.format_number(total_matches),
-
                     self.format_number(total_emissions),
-
                     self.format_number(total_emissions / total_matches)
-
                 ), tags=('total',))
 
+                # Use COLORS for total row styling
                 self.summary_tree.tag_configure('total',
+                                                background=COLORS['accent'],  # Use accent color
+                                                foreground=COLORS['bg_secondary'],  # Light text for contrast
+                                                font=('Segoe UI', 9, 'bold'))
 
-                                                background='#E8E8E8',
+            # Configure alternating row colors using COLORS
+            self.matches_tree.tag_configure('evenrow',
+                                            background=COLORS['accent_light'])  # Light accent color
+            self.matches_tree.tag_configure('oddrow',
+                                            background=COLORS['bg_secondary'])  # Background color
 
-                                                font=('Segoe UI', 9, 'bold')
-
-                                                )
-
-            # Update matches tree with only non-zero distance matches
-
-            for i, match in enumerate(matches_data):
-                row_tags = ('even',) if i % 2 == 0 else ('odd',)
-
+            # Update matches tree with alternating colors
+            for idx, match in enumerate(matches_data):
+                tag = 'evenrow' if idx % 2 == 0 else 'oddrow'
                 self.matches_tree.insert('', 'end', values=(
-
                     match['home_team'],
-
                     match['away_team'],
-
                     match['competition'],
-
-                ), tags=row_tags)
-
-            self.matches_tree.tag_configure('even', background='#f0f0f0')
-
-            self.matches_tree.tag_configure('odd', background='#ffffff')
-
+                ), tags=(tag,))
 
         except Exception as e:
-
             messagebox.showerror("Analysis Error", f"Error updating analysis: {str(e)}")
-
             raise
-
     def on_round_trip_toggle(self):
 
         """Recalculate emissions when round trip toggle changes"""
@@ -1010,12 +1121,39 @@ class MainWindow(tk.Tk):
             self.copy_error_button.config(state='normal')
 
     def display_results(self, result, home_team, away_team):
-        # Clear previous results
         self.result_text.delete(1.0, tk.END)
 
         # Header
-        self.result_text.insert(tk.END, "✈️ Flight Emissions Report ✈️\n")
-        self.result_text.insert(tk.END, "=" * 80 + "\n\n")
+
+        self.result_text.insert(tk.END, "✈️ Flight Details\n", 'header')
+
+        self.result_text.insert(tk.END, "─" * 80 + "\n\n")  # Using softer separator
+
+        # Configure tags for styling
+
+        self.result_text.tag_configure('header',
+
+                                       font=('Segoe UI', 12, 'bold'),
+
+                                       foreground=COLORS['accent']
+
+                                       )
+
+        self.result_text.tag_configure('subheader',
+
+                                       font=('Segoe UI', 11, 'bold'),
+
+                                       foreground=COLORS['accent_light']
+
+                                       )
+
+        self.result_text.tag_configure('normal',
+
+                                       font=('Segoe UI', 10),
+
+                                       foreground=COLORS['text_primary']
+
+                                       )
 
         # Flight Details Section
         self.result_text.insert(tk.END, "🛫 Flight Details\n")

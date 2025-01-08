@@ -3,34 +3,53 @@
 import tkinter as tk
 from tkinter import ttk
 from src.data.team_data import get_all_teams
+from src.gui.theme import COLORS
 
 
 class TeamAutoComplete(ttk.Frame):
-    """Autocomplete widget for team selection."""
 
     def __init__(self, master=None, **kwargs):
+
         super().__init__(master)
-        self._completion_list = sorted(get_all_teams())  # Get sorted list of all teams
+
+        self._completion_list = sorted(get_all_teams())
+
 
         # Create entry widget
+
         self.entry = ttk.Entry(self, **kwargs)
+
         self.entry.pack(fill='x', expand=True)
 
-        # Create listbox popup
         self.listbox = tk.Listbox(
+
             self,
+
             height=6,
+
             font=('Segoe UI', 10),
+
             selectmode=tk.SINGLE,
+
             activestyle='none',
-            bg='white',
-            fg='#2C3E50',
-            selectbackground='#3498DB',
+
+            bg=COLORS['listbox_bg'],
+
+            fg=COLORS['text_primary'],
+
+            selectbackground=COLORS['listbox_select'],
+
             selectforeground='white',
+
             borderwidth=1,
+
             relief=tk.SOLID
+
         )
 
+        # Update the entry widget:
+
+        self.entry = ttk.Entry(self, style='Custom.TEntry', **kwargs)
         # Bind events
         self.entry.bind('<KeyRelease>', self.check_input)
         self.entry.bind('<Down>', self.handle_arrow_key)
@@ -171,7 +190,36 @@ class CompetitionAutoComplete(ttk.Frame):
             'Serie A',
             'Ligue 1'
         ]
+        # Update listbox appearance
+        self.listbox = tk.Listbox(
 
+            self,
+
+            height=6,
+
+            font=('Segoe UI', 10),
+
+            selectmode=tk.SINGLE,
+
+            activestyle='none',
+
+            bg=COLORS['listbox_bg'],
+
+            fg=COLORS['text_primary'],
+
+            selectbackground=COLORS['listbox_select'],
+
+            selectforeground='white',
+
+            borderwidth=1,
+
+            relief=tk.SOLID
+
+        )
+
+        # Update the entry widget:
+
+        self.entry = ttk.Entry(self, style='Custom.TEntry', **kwargs)
         # Create entry widget
         self.entry = ttk.Entry(self, **kwargs)
         self.entry.pack(fill='x', expand=True)
