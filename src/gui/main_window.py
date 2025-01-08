@@ -10,9 +10,9 @@ import pandas as pd
 import self
 
 from src.config.constants import DEFAULT_PASSENGERS, EMISSION_FACTORS, TRANSPORT_MODES, CARBON_PRICE, \
-    ALTERNATIVE_TRANSPORT_PREMIUM, SOCIAL_CARBON_COST, TEAM_COUNTRIES, SOCIAL_CARBON_COSTS, CARBON_PRICES_EUR, \
+    ALTERNATIVE_TRANSPORT_PREMIUM, SOCIAL_CARBON_COST, SOCIAL_CARBON_COSTS, CARBON_PRICES_EUR, \
     EU_ETS_PRICE
-from src.data.team_data import get_team_airport, get_airport_coordinates
+from src.data.team_data import get_team_airport, get_airport_coordinates, TEAM_COUNTRIES
 from src.gui.widgets.auto_complete import TeamAutoComplete, CompetitionAutoComplete
 from src.models.emissions import EmissionsCalculator
 from src.utils.calculations import calculate_transport_emissions, calculate_equivalencies, get_carbon_price

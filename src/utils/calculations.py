@@ -7,9 +7,9 @@ from src.config.constants import (
     KM_PER_MILE,
     TRANSPORT_MODES,
     EMISSION_FACTORS,
-    AIRCRAFT_EMISSION_FACTORS, TEAM_COUNTRIES, DEFAULT_CARBON_PRICE, EU_ETS_PRICE, CARBON_PRICES_EUR, EUR_TO_GBP
+    AIRCRAFT_EMISSION_FACTORS, DEFAULT_CARBON_PRICE, EU_ETS_PRICE, CARBON_PRICES_EUR, EUR_TO_GBP
 )
-from src.data.team_data import get_airport_coordinates, get_team_airport
+from src.data.team_data import get_airport_coordinates, get_team_airport, TEAM_COUNTRIES
 
 from src.models.icao_calculator import ICAOEmissionsCalculator
 

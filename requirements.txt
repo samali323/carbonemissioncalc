@@ -1,8 +1,17 @@
+
+
+# Data Processing
 pandas>=2.2.0
 numpy>=1.21.0
+
+# Visualization
 matplotlib>=3.9.0
-airportsdata>=1.0.0
-dash>=2.0.0
 plotly>=5.0.0
 
-self~=2020.12.3
+# Web Components
+dash>=2.0.0
+
+# Data Sources
+airportsdata>=1.0.0
+
+

@@ -415,7 +415,250 @@ TEAM_AIRPORTS = {
     'Legia Warsaw': 'WAW'
 
 }
+TEAM_COUNTRIES = {
+    # England (GB)
+    'Arsenal FC': 'GB',
+    'Aston Villa': 'GB',
+    'Bournemouth': 'GB',
+    'Brighton & Hove Albion': 'GB',
+    'Brentford': 'GB',
+    'Chelsea': 'GB',
+    'Crystal Palace': 'GB',
+    'Everton': 'GB',
+    'Fulham': 'GB',
+    'Ipswich Town': 'GB',
+    'Leicester City': 'GB',
+    'Liverpool': 'GB',
+    'Manchester City': 'GB',
+    'Manchester United': 'GB',
+    'Newcastle United': 'GB',
+    'Nottingham Forest': 'GB',
+    'Southampton': 'GB',
+    'Tottenham Hotspur': 'GB',
+    'West Ham United': 'GB',
+    'Wolverhampton Wanderers': 'GB',
 
+    # Germany (DE)
+    '1. FC Heidenheim': 'DE',
+    'Bayer Leverkusen': 'DE',
+    'Bayern Munich': 'DE',
+    'Borussia Dortmund': 'DE',
+    'Borussia Monchengladbach': 'DE',
+    'Eintracht Frankfurt': 'DE',
+    'FC Augsburg': 'DE',
+    'FC St. Pauli': 'DE',
+    'Holstein Kiel': 'DE',
+    'Mainz 05': 'DE',
+    'RB Leipzig': 'DE',
+    'SC Freiburg': 'DE',
+    'TSG Hoffenheim': 'DE',
+    'Union Berlin': 'DE',
+    'VfB Stuttgart': 'DE',
+    'VfL Bochum': 'DE',
+    'VfL Wolfsburg': 'DE',
+    'Werder Bremen': 'DE',
+
+    # Spain (ES)
+    'Alaves': 'ES',
+    'Athletic Bilbao': 'ES',
+    'Atletico Madrid': 'ES',
+    'Barcelona': 'ES',
+    'Celta Vigo': 'ES',
+    'Espanyol': 'ES',
+    'Getafe': 'ES',
+    'Girona': 'ES',
+    'Las Palmas': 'ES',
+    'Leganes': 'ES',
+    'Mallorca': 'ES',
+    'Osasuna': 'ES',
+    'Rayo Vallecano': 'ES',
+    'Real Betis': 'ES',
+    'Real Madrid': 'ES',
+    'Real Sociedad': 'ES',
+    'Sevilla': 'ES',
+    'Valencia': 'ES',
+    'Valladolid': 'ES',
+    'Villarreal': 'ES',
+
+    # Italy (IT)
+    'AC Milan': 'IT',
+    'Atalanta': 'IT',
+    'Bologna': 'IT',
+    'Cagliari': 'IT',
+    'Como': 'IT',
+    'Empoli': 'IT',
+    'Fiorentina': 'IT',
+    'Genoa': 'IT',
+    'Hellas Verona': 'IT',
+    'Inter Milan': 'IT',
+    'Juventus': 'IT',
+    'Lazio': 'IT',
+    'Lecce': 'IT',
+    'Monza': 'IT',
+    'Napoli': 'IT',
+    'Parma': 'IT',
+    'Roma': 'IT',
+    'Torino': 'IT',
+    'Udinese': 'IT',
+    'Venezia': 'IT',
+
+    # France (FR)
+    'Angers': 'FR',
+    'AS Monaco': 'FR',
+    'Auxerre': 'FR',
+    'Brest': 'FR',
+    'Le Havre': 'FR',
+    'Lens': 'FR',
+    'Lille': 'FR',
+    'Lyon': 'FR',
+    'Marseille': 'FR',
+    'Montpellier': 'FR',
+    'Nantes': 'FR',
+    'Nice': 'FR',
+    'Paris Saint-Germain': 'FR',
+    'Reims': 'FR',
+    'Rennes': 'FR',
+    'Saint-Etienne': 'FR',
+    'Strasbourg': 'FR',
+    'Toulouse': 'FR',
+
+    # Netherlands (NL)
+    'Ajax': 'NL',
+    'AZ Alkmaar': 'NL',
+    'Feyenoord': 'NL',
+    'PSV Eindhoven': 'NL',
+    'Twente': 'NL',
+
+    # Portugal (PT)
+    'Benfica': 'PT',
+    'Braga': 'PT',
+    'Porto': 'PT',
+    'Sporting CP': 'PT',
+    'Vitoria de Guimaraes': 'PT',
+
+    # Belgium (BE)
+    'Anderlecht': 'BE',
+    'Cercle Brugge': 'BE',
+    'Club Brugge': 'BE',
+    'Gent': 'BE',
+    'Union Saint-Gilloise': 'BE',
+
+    # Scotland (GB)
+    'Celtic': 'GB',
+    'Hearts': 'GB',
+    'Rangers': 'GB',
+
+    # Turkey (TR)
+    'Besiktas': 'TR',
+    'Fenerbahce': 'TR',
+    'Galatasaray': 'TR',
+    'Istanbul Basaksehir': 'TR',
+
+    # Greece (GR)
+    'Olympiacos': 'GR',
+    'PAOK': 'GR',
+    'Panathinaikos': 'GR',
+
+    # Ukraine (UA)
+    'Dynamo Kyiv': 'UA',
+    'Shakhtar Donetsk': 'UA',
+
+    # Czech Republic (CZ)
+    'Celje': 'CZ',
+    'Mlada Boleslav': 'CZ',
+    'Slavia Prague': 'CZ',
+    'Sparta Prague': 'CZ',
+    'Viktoria Plzen': 'CZ',
+
+    # Austria (AT)
+    'LASK': 'AT',
+    'Rapid Wien': 'AT',
+    'Red Bull Salzburg': 'AT',
+    'Sturm Graz': 'AT',
+
+    # Switzerland (CH)
+    'Lugano': 'CH',
+    'St. Gallen': 'CH',
+    'Young Boys': 'CH',
+
+    # Sweden (SE)
+    'Djurgardens IF': 'SE',
+    'IF Elfsborg': 'SE',
+    'Malmo FF': 'SE',
+
+    # Finland (FI)
+    'HJK Helsinki': 'FI',
+
+    # Norway (NO)
+    'Bodo/Glimt': 'NO',
+    'Molde': 'NO',
+
+    # Denmark (DK)
+    'Copenhagen': 'DK',
+    'Midtjylland': 'DK',
+
+    # Hungary (HU)
+    'Ferencvaros': 'HU',
+
+    # Serbia (RS)
+    'FK TSC Backa Topola': 'RS',
+    'Red Star Belgrade': 'RS',
+
+    # Croatia (HR)
+    'Dinamo Zagreb': 'HR',
+
+    # Slovakia (SK)
+    'Slovan Bratislava': 'SK',
+
+    # Slovenia (SI)
+    'Olimpija Ljubljana': 'SI',
+
+    # Romania (RO)
+    'FCSB': 'RO',
+    'Petrocub Hincesti': 'RO',
+
+    # Belarus (BY)
+    'Dinamo Minsk': 'BY',
+
+    # Latvia (LV)
+    'RFS': 'LV',
+
+    # Kazakhstan (KZ)
+    'Astana': 'KZ',
+
+    # Israel (IL)
+    'Maccabi Tel Aviv': 'IL',
+
+    # Cyprus (CY)
+    'APOEL': 'CY',
+    'Omonia': 'CY',
+    'Pafos': 'CY',
+
+    # Azerbaijan (AZ)
+    'Qarabag': 'AZ',
+
+    # Armenia (AM)
+    'Noah': 'AM',
+
+    # Poland (PL)
+    'Jagiellonia Biaystok': 'PL',
+    'Legia Warsaw': 'PL',
+
+    # Iceland (IS)
+    'Vikingur Reykjavik': 'IS',
+
+    # Ireland (IE)
+    'Shamrock Rovers': 'IE',
+
+    # Wales (GB)
+    'The New Saints': 'GB',
+
+    # Northern Ireland (GB)
+    'Larne': 'GB',
+
+    # Bosnia and Herzegovina (BA)
+    'Borac Banja Luka': 'BA'
+}
 AIRPORT_COORDINATES = {
         # UK Airports
         'LHR': {'lat': 51.4700, 'lon': -0.4543},  # London Heathrow
