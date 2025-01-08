@@ -1,26 +1,25 @@
 # Core imports
 from __future__ import annotations
+
 import json
 import os
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
+
 import pandas as pd
 
 # Application-specific imports
 from src.config.constants import (
-    DEFAULT_PASSENGERS, EMISSION_FACTORS, TRANSPORT_MODES, CARBON_PRICE,
-    ALTERNATIVE_TRANSPORT_PREMIUM, SOCIAL_CARBON_COST, SOCIAL_CARBON_COSTS,
+    DEFAULT_PASSENGERS, EMISSION_FACTORS, TRANSPORT_MODES, SOCIAL_CARBON_COSTS,
     CARBON_PRICES_EUR, EU_ETS_PRICE
 )
 from src.data.team_data import get_team_airport, get_airport_coordinates, TEAM_COUNTRIES
+from src.gui.theme import COLORS
 from src.gui.widgets.auto_complete import TeamAutoComplete, CompetitionAutoComplete
 from src.models.emissions import EmissionsCalculator, EmissionsResult
 from src.utils.calculations import (
-    calculate_transport_emissions, calculate_equivalencies, get_carbon_price,
-    calculate_distance, determine_mileage_type
+    calculate_transport_emissions, calculate_equivalencies, calculate_distance, determine_mileage_type
 )
-from src.models.icao_calculator import ICAOEmissionsCalculator
-from src.gui.theme import COLORS
 
 
 # Section 2: Main Window Class Definition and Core UI Setup
