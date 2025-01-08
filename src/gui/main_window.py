@@ -40,6 +40,29 @@ class MainWindow(tk.Tk):
         self.configure(bg=COLORS['bg_primary'])
 
         # Configure styles
+        style = ttk.Style()
+
+        style.configure(
+
+            'Custom.TEntry',
+
+            fieldbackground=COLORS['entry_bg'],
+
+            background=COLORS['bg_secondary'],
+
+            foreground=COLORS['text_primary']
+
+        )
+
+        style.configure(
+
+            'Custom.TButton',
+
+            background=COLORS['accent'],
+
+            foreground=COLORS['text_primary']
+
+        )
 
         style = ttk.Style()
 
@@ -523,37 +546,104 @@ class MainWindow(tk.Tk):
         matches_frame.pack(fill='both', expand=True)
 
         # Filter frame
+
         filter_frame = ttk.Frame(matches_frame)
+
         filter_frame.pack(fill='x', pady=(0, 5))
 
         # Filter fields with autocomplete
+
         self.filters = {}
 
-        # Home team filter
+        # Home team filter with proper styling and configuration
+
         ttk.Label(filter_frame, text="Home Team:").grid(row=0, column=0, padx=5, pady=5)
-        self.filters['Home Team'] = TeamAutoComplete(filter_frame, width=20)
-        self.filters['Home Team'].grid(row=0, column=1, padx=5, pady=5)
 
-        # Away team filter
+        self.filters['Home Team'] = TeamAutoComplete(
+
+            filter_frame,
+
+            width=20,
+
+            style='Custom.TEntry'  # Apply custom style
+
+        )
+
+        self.filters['Home Team'].grid(row=0, column=1, padx=5, pady=5, sticky='ew')
+
+        # Away team filter with proper styling and configuration
+
         ttk.Label(filter_frame, text="Away Team:").grid(row=0, column=2, padx=5, pady=5)
-        self.filters['Away Team'] = TeamAutoComplete(filter_frame, width=20)
-        self.filters['Away Team'].grid(row=0, column=3, padx=5, pady=5)
 
-        # Competition filter
+        self.filters['Away Team'] = TeamAutoComplete(
+
+            filter_frame,
+
+            width=20,
+
+            style='Custom.TEntry'  # Apply custom style
+
+        )
+
+        self.filters['Away Team'].grid(row=0, column=3, padx=5, pady=5, sticky='ew')
+
+        # Competition filter with proper styling and configuration
+
         ttk.Label(filter_frame, text="Competition:").grid(row=0, column=4, padx=5, pady=5)
-        self.filters['Competition'] = CompetitionAutoComplete(filter_frame, width=20)
-        self.filters['Competition'].grid(row=0, column=5, padx=5, pady=5)
+
+        self.filters['Competition'] = CompetitionAutoComplete(
+
+            filter_frame,
+
+            width=20,
+
+            style='Custom.TEntry'  # Apply custom style
+
+        )
+
+        self.filters['Competition'].grid(row=0, column=5, padx=5, pady=5, sticky='ew')
 
         # Filter buttons
+
         button_frame = ttk.Frame(filter_frame)
+
         button_frame.grid(row=0, column=6, padx=5, pady=5)
 
-        ttk.Button(button_frame, text="Apply Filters", command=self.apply_filters).pack(side='left', padx=2)
-        ttk.Button(button_frame, text="Clear Filters", command=self.clear_filters).pack(side='left', padx=2)
+        # Add filter buttons with consistent styling
 
-        # Configure filter frame grid
+        ttk.Button(
+
+            button_frame,
+
+            text="Apply Filters",
+
+            command=self.apply_filters,
+
+            style='Custom.TButton'
+
+        ).pack(side='left', padx=2)
+
+        ttk.Button(
+
+            button_frame,
+
+            text="Clear Filters",
+
+            command=self.clear_filters,
+
+            style='Custom.TButton'
+
+        ).pack(side='left', padx=2)
+
+        # Configure filter frame grid with proper weights
+
         for i in range(7):
             filter_frame.grid_columnconfigure(i, weight=1)
+
+        # Bind events for filter updates
+
+        for filter_widget in self.filters.values():
+            filter_widget.bind('<KeyRelease>', lambda e: self.on_filter_change())
 
         # Create matches tree
         self.matches_tree = ttk.Treeview(
@@ -565,7 +655,8 @@ class MainWindow(tk.Tk):
         )
 
         # Configure alternating row colors
-        self.matches_tree.tag_configure('evenrow', background=COLORS['accent_light'])
+        self.matches_tree.tag_configure('evenrow', background=COLORS['bg_secondary'])
+
         self.matches_tree.tag_configure('oddrow', background=COLORS['bg_secondary'])
 
         # Configure match columns with sorting
@@ -592,6 +683,16 @@ class MainWindow(tk.Tk):
         # Add match selection bindings
         self.add_match_selection_bindings()
 
+    def on_filter_change(self):
+
+        """Handle real-time filter updates"""
+
+        # Debounce filter updates to prevent excessive processing
+
+        if hasattr(self, '_filter_timer'):
+            self.after_cancel(self._filter_timer)
+
+        self._filter_timer = self.after(300, self.apply_filters)
     def sort_treeview(self, tree, col, reverse):
         """Sort treeview contents by column"""
         data = []
@@ -890,9 +991,9 @@ class MainWindow(tk.Tk):
             style = ttk.Style()
             style.configure(
                 "Summary.Treeview.Heading",
-                background=COLORS['accent'],  # Use accent color from COLORS
+                background=COLORS['bg_primary'],  # Use accent color from COLORS
                 foreground=COLORS['text_primary'],  # Use text color from COLORS
-                relief='flat'
+
             )
 
             for comp_name, group in competitions:
@@ -957,13 +1058,13 @@ class MainWindow(tk.Tk):
 
                 # Use COLORS for total row styling
                 self.summary_tree.tag_configure('total',
-                                                background=COLORS['accent'],  # Use accent color
+                                                background=COLORS['bg_primary'],  # Use accent color
                                                 foreground=COLORS['bg_secondary'],  # Light text for contrast
                                                 font=('Segoe UI', 9, 'bold'))
 
             # Configure alternating row colors using COLORS
             self.matches_tree.tag_configure('evenrow',
-                                            background=COLORS['accent_light'])  # Light accent color
+                                            background=COLORS['bg_primary'])  # Light accent color
             self.matches_tree.tag_configure('oddrow',
                                             background=COLORS['bg_secondary'])  # Background color
 

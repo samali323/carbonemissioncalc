@@ -7,49 +7,34 @@ from src.gui.theme import COLORS
 
 
 class TeamAutoComplete(ttk.Frame):
-
     def __init__(self, master=None, **kwargs):
-
         super().__init__(master)
-
         self._completion_list = sorted(get_all_teams())
 
+        # Remove style from kwargs if it exists
+        style_arg = kwargs.pop('style', 'Custom.TEntry')
 
-        # Create entry widget
-
-        self.entry = ttk.Entry(self, **kwargs)
-
+        # Create entry widget with style
+        self.entry = ttk.Entry(self, style=style_arg, **kwargs)
         self.entry.pack(fill='x', expand=True)
 
         self.listbox = tk.Listbox(
-
             self,
-
             height=6,
-
             font=('Segoe UI', 10),
-
             selectmode=tk.SINGLE,
-
             activestyle='none',
-
             bg=COLORS['listbox_bg'],
-
             fg=COLORS['text_primary'],
-
             selectbackground=COLORS['listbox_select'],
-
             selectforeground='white',
-
             borderwidth=1,
-
             relief=tk.SOLID
-
         )
 
-        # Update the entry widget:
+        # Remove duplicate entry creation
+        # self.entry = ttk.Entry(self, style='Custom.TEntry', **kwargs)  # Remove this line
 
-        self.entry = ttk.Entry(self, style='Custom.TEntry', **kwargs)
         # Bind events
         self.entry.bind('<KeyRelease>', self.check_input)
         self.entry.bind('<Down>', self.handle_arrow_key)
@@ -62,7 +47,6 @@ class TeamAutoComplete(ttk.Frame):
         self.listbox.bind('<Down>', self.handle_listbox_arrow)
 
         self.listbox_open = False
-
     def check_input(self, event):
         """Check input and update suggestions."""
         if event.keysym in ('Up', 'Down', 'Return'):
@@ -190,54 +174,28 @@ class CompetitionAutoComplete(ttk.Frame):
             'Serie A',
             'Ligue 1'
         ]
-        # Update listbox appearance
+
+        # Create listbox with styling
         self.listbox = tk.Listbox(
-
             self,
-
             height=6,
-
             font=('Segoe UI', 10),
-
             selectmode=tk.SINGLE,
-
             activestyle='none',
-
             bg=COLORS['listbox_bg'],
-
             fg=COLORS['text_primary'],
-
             selectbackground=COLORS['listbox_select'],
-
             selectforeground='white',
-
             borderwidth=1,
-
             relief=tk.SOLID
-
         )
 
-        # Update the entry widget:
+        # Remove style from kwargs if it exists
+        style_arg = kwargs.pop('style', 'Custom.TEntry')
 
-        self.entry = ttk.Entry(self, style='Custom.TEntry', **kwargs)
-        # Create entry widget
-        self.entry = ttk.Entry(self, **kwargs)
+        # Create single entry widget with proper styling
+        self.entry = ttk.Entry(self, style=style_arg, **kwargs)
         self.entry.pack(fill='x', expand=True)
-
-        # Create listbox popup
-        self.listbox = tk.Listbox(
-            self,
-            height=6,
-            font=('Segoe UI', 10),
-            selectmode=tk.SINGLE,
-            activestyle='none',
-            bg='white',
-            fg='#2C3E50',
-            selectbackground='#3498DB',
-            selectforeground='white',
-            borderwidth=1,
-            relief=tk.SOLID
-        )
 
         # Bind events
         self.entry.bind('<KeyRelease>', self.check_input)
@@ -251,6 +209,15 @@ class CompetitionAutoComplete(ttk.Frame):
         self.listbox.bind('<Down>', self.handle_listbox_arrow)
 
         self.listbox_open = False
+
+    # Implement same methods as TeamAutoComplete
+    check_input = TeamAutoComplete.check_input
+    handle_arrow_key = TeamAutoComplete.handle_arrow_key
+    handle_listbox_arrow = TeamAutoComplete.handle_listbox_arrow
+    handle_return = TeamAutoComplete.handle_return
+    select_item = TeamAutoComplete.select_item
+    get = TeamAutoComplete.get
+    set = TeamAutoComplete.set
 
     # Implement same methods as TeamAutoComplete
     check_input = TeamAutoComplete.check_input
