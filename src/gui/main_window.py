@@ -1,28 +1,29 @@
+# Core imports
 from __future__ import annotations
-
 import json
 import os
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
-
-
 import pandas as pd
-import self
 
-from src.config.constants import DEFAULT_PASSENGERS, EMISSION_FACTORS, TRANSPORT_MODES, CARBON_PRICE, \
-    ALTERNATIVE_TRANSPORT_PREMIUM, SOCIAL_CARBON_COST, SOCIAL_CARBON_COSTS, CARBON_PRICES_EUR, \
-    EU_ETS_PRICE
+# Application-specific imports
+from src.config.constants import (
+    DEFAULT_PASSENGERS, EMISSION_FACTORS, TRANSPORT_MODES, CARBON_PRICE,
+    ALTERNATIVE_TRANSPORT_PREMIUM, SOCIAL_CARBON_COST, SOCIAL_CARBON_COSTS,
+    CARBON_PRICES_EUR, EU_ETS_PRICE
+)
 from src.data.team_data import get_team_airport, get_airport_coordinates, TEAM_COUNTRIES
 from src.gui.widgets.auto_complete import TeamAutoComplete, CompetitionAutoComplete
-from src.models.emissions import EmissionsCalculator
-from src.utils.calculations import calculate_transport_emissions, calculate_equivalencies, get_carbon_price
-from src.models.emissions import EmissionsResult
-from src.utils.calculations import calculate_distance, determine_mileage_type
+from src.models.emissions import EmissionsCalculator, EmissionsResult
+from src.utils.calculations import (
+    calculate_transport_emissions, calculate_equivalencies, get_carbon_price,
+    calculate_distance, determine_mileage_type
+)
 from src.models.icao_calculator import ICAOEmissionsCalculator
 from src.gui.theme import COLORS
-# Color scheme
 
 
+# Section 2: Main Window Class Definition and Core UI Setup
 class MainWindow(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -32,78 +33,50 @@ class MainWindow(tk.Tk):
         # Configure color scheme
 
         self.title("Football Team Flight Emissions Calculator")
-
         self.geometry("1200x800")
 
         # Configure the root window background
-
         self.configure(bg=COLORS['bg_primary'])
 
         # Configure styles
         style = ttk.Style()
 
         style.configure(
-
             'Custom.TEntry',
-
             fieldbackground=COLORS['entry_bg'],
-
             background=COLORS['bg_secondary'],
-
             foreground=COLORS['text_primary']
-
         )
 
         style.configure(
-
             'Custom.TButton',
-
             background=COLORS['accent'],
-
             foreground=COLORS['text_primary']
-
         )
 
         style = ttk.Style()
-
         style.configure('TFrame', background=COLORS['bg_primary'])
-
         style.configure('TLabelframe', background=COLORS['bg_primary'])
-
         style.configure('TLabel', background=COLORS['bg_primary'], foreground=COLORS['text_primary'])
-
         style.configure('TButton', background=COLORS['accent'])
-
         style.configure('Custom.TEntry', fieldbackground=COLORS['entry_bg'])
 
         # Configure text widget style
-
         self.option_add('*Text*Background', COLORS['bg_secondary'])
-
         self.option_add('*Text*foreground', COLORS['text_primary'])
 
         # Update Treeview style
-
         style.configure(
-
             "Treeview",
-
             background=COLORS['bg_secondary'],
-
             fieldbackground=COLORS['bg_secondary'],
-
             foreground=COLORS['text_primary']
-
         )
 
         style.configure(
-
             "Treeview.Heading",
-
             background=COLORS['accent'],
-
             foreground=COLORS['text_primary']
-
         )
 
         # Initialize calculator and data storage
@@ -145,44 +118,30 @@ class MainWindow(tk.Tk):
         self.create_error_handling_widgets()
 
         self.passengers_var = tk.StringVar(value=str(DEFAULT_PASSENGERS))
-
         self.passengers_entry.config(textvariable=self.passengers_var)
-
         self.passengers_var.trace_add('write', self.on_passengers_change)
 
     def create_error_handling_widgets(self):
-
         """Create widgets for error handling"""
-
         error_frame = ttk.Frame(self.calculator_tab)
-
         error_frame.grid(row=2, column=0, columnspan=2, sticky='ew', padx=10, pady=5)
 
         self.copy_error_button = ttk.Button(
-
             error_frame,
-
             text="Copy Last Error",
-
             command=self.copy_error_to_clipboard,
-
             state='disabled'
-
         )
-
         self.copy_error_button.pack(side='right', padx=5)
 
     def copy_error_to_clipboard(self):
-
         """Copy the last error message to clipboard"""
-
         if self.last_error:
             self.clipboard_clear()
-
             self.clipboard_append(self.last_error)
-
             messagebox.showinfo("Success", "Error message copied to clipboard")
 
+    # Section 3: Calculator Tab and Emissions Calculations
     def create_calculator_tab(self):
         # Left input frame
         left_frame = ttk.Frame(self.calculator_tab, padding="10")
@@ -250,33 +209,110 @@ class MainWindow(tk.Tk):
 
         # Results text
         self.result_text = tk.Text(
-
             right_frame,
-
             wrap=tk.WORD,
-
             height=30,
-
             bg=COLORS['bg_secondary'],
-
             fg=COLORS['text_primary'],
-
             font=('Segoe UI', 10),
-
             relief='solid',
-
             borderwidth=1,
-
             padx=10,
-
             pady=10
-
         )
         self.result_text.pack(fill='both', expand=True)
 
         # Configure grid weights
         self.calculator_tab.columnconfigure(1, weight=1)
         self.calculator_tab.rowconfigure(0, weight=1)
+
+    def on_round_trip_toggle(self):
+        """Recalculate emissions when round trip toggle changes"""
+        try:
+            if self.home_team_entry.get() and self.away_team_entry.get():
+                self.calculate()  # This will trigger a full recalculation
+        except Exception as e:
+            messagebox.showerror("Error", f"Error updating results: {str(e)}")
+
+    def on_passengers_change(self, *args):
+        """Recalculate emissions when passenger count changes"""
+        if hasattr(self, 'latest_result'):
+            self.calculate()
+
+    def calculate(self):
+        """Calculate emissions for selected teams"""
+        try:
+            # Get inputs
+            home_team = self.home_team_entry.get()
+            away_team = self.away_team_entry.get()
+            passengers = int(self.passengers_entry.get())
+            is_round_trip = self.round_trip_var.get()
+
+            # Validate inputs
+            if not home_team or not away_team:
+                raise ValueError("Please enter both home and away teams")
+
+            # Get airports and coordinates
+            home_airport = get_team_airport(home_team)
+            away_airport = get_team_airport(away_team)
+
+            if not home_airport or not away_airport:
+                raise ValueError("Airport not found for one or both teams")
+
+            home_coords = get_airport_coordinates(home_airport)
+            away_coords = get_airport_coordinates(away_airport)
+
+            if not home_coords or not away_coords:
+                raise ValueError("Coordinates not found for one or both airports")
+
+            # Calculate distance
+            distance = calculate_distance(
+                home_coords['lat'],
+                home_coords['lon'],
+                away_coords['lat'],
+                away_coords['lon']
+            )
+
+            # Calculate emissions using ICAO calculator
+            result_dict = self.calculator.icao_calculator.calculate_emissions(
+                distance_km=distance,
+                aircraft_type="A320",
+                cabin_class="business",
+                passengers=passengers,
+                cargo_tons=2.0,
+                is_international=True
+            )
+
+            # Adjust for round trip if needed
+            if is_round_trip:
+                result_dict["emissions_total_kg"] *= 2
+                result_dict["emissions_per_pax_kg"] *= 2
+                distance *= 2
+
+            # Create EmissionsResult object
+            result = EmissionsResult(
+                total_emissions=result_dict['emissions_total_kg'] / 1000,
+                per_passenger=result_dict['emissions_per_pax_kg'] / 1000,
+                distance_km=distance,
+                corrected_distance_km=result_dict['corrected_distance_km'],
+                fuel_consumption=result_dict['fuel_consumption_kg'],
+                flight_type=determine_mileage_type(distance),
+                is_round_trip=is_round_trip,
+                additional_data=result_dict['factors_applied']
+            )
+
+            # Store and update display
+            self.latest_result = result
+            self.display_results(result, home_team, away_team)
+            self.update_transport_comparison(result)
+            self.export_button.config(state='normal')
+
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+            self.last_error = str(e)
+            self.copy_error_button.config(state='normal')
+
+    # Section 3 (continued): Calculator Tab and Emissions Calculations
 
     def update_transport_comparison(self, result):
         """Update transport mode comparison with comprehensive SCC analysis"""
@@ -428,56 +464,118 @@ class MainWindow(tk.Tk):
                                         "|" + "-" * (cost_col + 2) + "|" + "-" * (cost_col + 2) +
                                         "|" + "-" * (cost_col + 2) + "|" + "-" * (cost_col + 2) + "|\n")
 
-
     def _calculate_air_route_factor(self, distance_km: float) -> float:
-
         """Calculate route factor for air travel"""
-
         flight_type = determine_mileage_type(distance_km)
 
-        # Use emission factors from constants
-
         if flight_type == "Short":
-
             return EMISSION_FACTORS['ShortBusiness']
-
         elif flight_type == "Medium":
-
             return EMISSION_FACTORS['MediumBusiness']
-
         else:
-
             return EMISSION_FACTORS['LongBusiness']
 
     def _calculate_rail_route_factor(self, distance_km: float) -> float:
-        """
-        Calculate route factor for rail travel.
-
-        Args:
-            distance_km: Distance in kilometers
-
-        Returns:
-            float: CO2 emissions factor in kg CO2 per passenger-km
-        """
-        # Get rail emission factor from TRANSPORT_MODES constant
-        # Modern electric train: 0.041 kg CO2 per passenger-km
+        """Calculate route factor for rail travel"""
         return TRANSPORT_MODES['rail']['co2_per_km']
 
     def _calculate_bus_route_factor(self, distance_km: float) -> float:
-        """
-        Calculate route factor for bus travel.
-
-        Args:
-            distance_km: Distance in kilometers
-
-        Returns:
-            float: CO2 emissions factor in kg CO2 per passenger-km
-        """
-        # Get bus emission factor from TRANSPORT_MODES constant
-        # Modern coach bus: 0.027 kg CO2 per passenger-km
+        """Calculate route factor for bus travel"""
         return TRANSPORT_MODES['bus']['co2_per_km']
 
-        return TRANSPORT_MODES['bus']['co2_per_km']
+    def display_results(self, result, home_team, away_team):
+        """Display calculation results in the results text widget"""
+        self.result_text.delete(1.0, tk.END)
+
+        # Header
+        self.result_text.insert(tk.END, "✈️ Flight Details\n", 'header')
+        self.result_text.insert(tk.END, "─" * 80 + "\n\n")  # Using softer separator
+
+        # Configure tags for styling
+        self.result_text.tag_configure('header',
+                                       font=('Segoe UI', 12, 'bold'),
+                                       foreground=COLORS['accent'])
+
+        self.result_text.tag_configure('subheader',
+                                       font=('Segoe UI', 11, 'bold'),
+                                       foreground=COLORS['accent_light'])
+
+        self.result_text.tag_configure('normal',
+                                       font=('Segoe UI', 10),
+                                       foreground=COLORS['text_primary'])
+
+        # Flight Details Section
+        self.result_text.insert(tk.END, "🛫 Flight Details\n")
+        self.result_text.insert(tk.END, "-" * 40 + "\n")
+        self.result_text.insert(tk.END, f"🏠 Home Team: {home_team} \n    Airport: {get_team_airport(home_team)}\n")
+        self.result_text.insert(tk.END, f"🏃 Away Team: {away_team} \n    Airport: {get_team_airport(away_team)}\n")
+        self.result_text.insert(tk.END, f"📏 Distance: {result.distance_km:,.1f} km\n")
+        self.result_text.insert(tk.END, f"✈️ Flight Type: {result.flight_type}\n")
+        self.result_text.insert(tk.END, f"🔄 Round Trip: {'Yes ↔️' if result.is_round_trip else 'No →'}\n\n")
+
+        # Emissions Section
+        self.result_text.insert(tk.END, "🌡️ Emissions Results\n")
+        self.result_text.insert(tk.END, "-" * 40 + "\n")
+        self.result_text.insert(tk.END, f"📊 Total CO2: {result.total_emissions:,.2f} metric tons\n")
+        self.result_text.insert(tk.END, f"👤 Per Passenger: {result.per_passenger:,.2f} metric tons\n\n")
+
+        # Environmental Equivalencies Section
+        self.result_text.insert(tk.END, "🌍 Environmental Impact Equivalencies\n")
+        self.result_text.insert(tk.END, "-" * 40 + "\n")
+
+        # Calculate equivalencies
+        equivalencies = calculate_equivalencies(result.total_emissions)
+
+        # Organize equivalencies by category
+        categories = {
+            "🚗 Transportation Impact": {
+                'gasoline_vehicles_year': "Gasoline vehicles driven for one year",
+                'electric_vehicles_year': "Electric vehicles driven for one year",
+                'gasoline_vehicle_miles': "Miles driven by gasoline vehicle"
+            },
+            "⚡ Energy Usage": {
+                'homes_energy_year': "Homes' energy use for one year",
+                'homes_electricity_year': "Homes' electricity use for one year",
+                'smartphones_charged': "Smartphones charged"
+            },
+            "🌳 Environmental Offset": {
+                'tree_seedlings_10years': "Tree seedlings grown for 10 years",
+                'forest_acres_year': "Acres of U.S. forests in one year",
+                'forest_preserved_acres': "Acres of U.S. forests preserved"
+            },
+            "♻️ Waste & Resources": {
+                'waste_tons_recycled': "Tons of waste recycled",
+                'garbage_trucks_recycled': "Garbage trucks of waste recycled",
+                'trash_bags_recycled': "Trash bags of waste recycled"
+            },
+            "⛽ Fuel Equivalents": {
+                'gasoline_gallons': "Gallons of gasoline",
+                'diesel_gallons': "Gallons of diesel",
+                'propane_cylinders': "Propane cylinders for BBQ",
+                'oil_barrels': "Barrels of oil"
+            }
+        }
+
+        # Display equivalencies by category
+        for category, items in categories.items():
+            self.result_text.insert(tk.END, f"\n{category}\n")
+            self.result_text.insert(tk.END, "-" * 30 + "\n")
+            for key, description in items.items():
+                if key in equivalencies:
+                    value = equivalencies[key]
+                    formatted_value = f"{value:,.2f}"
+                    self.result_text.insert(tk.END, f"  • {formatted_value} {description}\n")
+
+        # Footer
+        self.result_text.insert(tk.END, "\n" + "=" * 80 + "\n")
+        self.result_text.insert(tk.END, "💡 This report helps visualize the environmental impact of the flight\n")
+        self.result_text.insert(tk.END, "🌱 Consider sustainable alternatives when possible\n")
+
+        # Enable export button if it exists
+        if hasattr(self, 'export_button'):
+            self.export_button.config(state='normal')
+
+    # Section 4: Analysis Tab and Data Processing
 
     def create_analysis_tab(self):
         """Create enhanced analysis tab with sorting and filtering"""
@@ -546,102 +644,62 @@ class MainWindow(tk.Tk):
         matches_frame.pack(fill='both', expand=True)
 
         # Filter frame
-
         filter_frame = ttk.Frame(matches_frame)
-
         filter_frame.pack(fill='x', pady=(0, 5))
 
         # Filter fields with autocomplete
-
         self.filters = {}
 
-        # Home team filter with proper styling and configuration
-
+        # Home team filter
         ttk.Label(filter_frame, text="Home Team:").grid(row=0, column=0, padx=5, pady=5)
-
         self.filters['Home Team'] = TeamAutoComplete(
-
             filter_frame,
-
             width=20,
-
-            style='Custom.TEntry'  # Apply custom style
-
+            style='Custom.TEntry'
         )
-
         self.filters['Home Team'].grid(row=0, column=1, padx=5, pady=5, sticky='ew')
 
-        # Away team filter with proper styling and configuration
-
+        # Away team filter
         ttk.Label(filter_frame, text="Away Team:").grid(row=0, column=2, padx=5, pady=5)
-
         self.filters['Away Team'] = TeamAutoComplete(
-
             filter_frame,
-
             width=20,
-
-            style='Custom.TEntry'  # Apply custom style
-
+            style='Custom.TEntry'
         )
-
         self.filters['Away Team'].grid(row=0, column=3, padx=5, pady=5, sticky='ew')
 
-        # Competition filter with proper styling and configuration
-
+        # Competition filter
         ttk.Label(filter_frame, text="Competition:").grid(row=0, column=4, padx=5, pady=5)
-
         self.filters['Competition'] = CompetitionAutoComplete(
-
             filter_frame,
-
             width=20,
-
-            style='Custom.TEntry'  # Apply custom style
-
+            style='Custom.TEntry'
         )
-
         self.filters['Competition'].grid(row=0, column=5, padx=5, pady=5, sticky='ew')
 
         # Filter buttons
-
         button_frame = ttk.Frame(filter_frame)
-
         button_frame.grid(row=0, column=6, padx=5, pady=5)
 
-        # Add filter buttons with consistent styling
-
         ttk.Button(
-
             button_frame,
-
             text="Apply Filters",
-
             command=self.apply_filters,
-
             style='Custom.TButton'
-
         ).pack(side='left', padx=2)
 
         ttk.Button(
-
             button_frame,
-
             text="Clear Filters",
-
             command=self.clear_filters,
-
             style='Custom.TButton'
-
         ).pack(side='left', padx=2)
 
-        # Configure filter frame grid with proper weights
-
+        # Configure filter frame grid weights
         for i in range(7):
             filter_frame.grid_columnconfigure(i, weight=1)
 
         # Bind events for filter updates
-
         for filter_widget in self.filters.values():
             filter_widget.bind('<KeyRelease>', lambda e: self.on_filter_change())
 
@@ -656,7 +714,6 @@ class MainWindow(tk.Tk):
 
         # Configure alternating row colors
         self.matches_tree.tag_configure('evenrow', background=COLORS['bg_secondary'])
-
         self.matches_tree.tag_configure('oddrow', background=COLORS['bg_secondary'])
 
         # Configure match columns with sorting
@@ -684,15 +741,12 @@ class MainWindow(tk.Tk):
         self.add_match_selection_bindings()
 
     def on_filter_change(self):
-
         """Handle real-time filter updates"""
-
-        # Debounce filter updates to prevent excessive processing
-
         if hasattr(self, '_filter_timer'):
             self.after_cancel(self._filter_timer)
 
         self._filter_timer = self.after(300, self.apply_filters)
+
     def sort_treeview(self, tree, col, reverse):
         """Sort treeview contents by column"""
         data = []
@@ -763,217 +817,80 @@ class MainWindow(tk.Tk):
         self.matches_tree.bind("<Return>", self.select_match)
 
     def select_match(self, event):
-
         """Handle match selection from analysis tab"""
-
         selection = self.matches_tree.selection()
 
         if not selection:
             return
 
         # Get match details
-
         values = self.matches_tree.item(selection[0])['values']
 
         # Update calculator entries
-
         self.home_team_entry.set_text(values[0])  # Use set_text() for TeamAutoComplete
-
         self.away_team_entry.set_text(values[1])
-
         self.round_trip_var.set(False)
 
         try:
-
             # Get inputs
-
             home_team = values[0]
-
             away_team = values[1]
-
             passengers = int(self.passengers_entry.get())
-
             is_round_trip = self.round_trip_var.get()
 
             # Get airports and coordinates
-
             home_airport = get_team_airport(home_team)
-
             away_airport = get_team_airport(away_team)
 
             if not home_airport or not away_airport:
                 raise ValueError("Airport not found for one or both teams")
 
             home_coords = get_airport_coordinates(home_airport)
-
             away_coords = get_airport_coordinates(away_airport)
 
             if not home_coords or not away_coords:
                 raise ValueError("Coordinates not found for one or both airports")
 
             # Calculate distance first
-
             distance = calculate_distance(
-
                 home_coords['lat'],
-
                 home_coords['lon'],
-
                 away_coords['lat'],
-
                 away_coords['lon']
-
             )
 
             # Calculate emissions using ICAO calculator
-
             result_dict = self.calculator.icao_calculator.calculate_emissions(
-
                 distance_km=distance,
-
                 aircraft_type="A320",
-
                 cabin_class="business",
-
                 passengers=passengers,
-
                 cargo_tons=2.0,
-
                 is_international=True
-
             )
 
             # Create EmissionsResult object
-
             result = EmissionsResult(
-
                 total_emissions=result_dict['emissions_total_kg'] / 1000,  # Convert to metric tons
-
                 per_passenger=result_dict['emissions_per_pax_kg'] / 1000,
-
                 distance_km=distance,
-
                 corrected_distance_km=result_dict['corrected_distance_km'],
-
                 fuel_consumption=result_dict['fuel_consumption_kg'],
-
                 flight_type=determine_mileage_type(distance),
-
                 is_round_trip=is_round_trip,
-
                 additional_data=result_dict['factors_applied']
-
             )
 
             # Display results
-
             self.display_results(result, home_team, away_team)
-
-            # Update transport comparison table
-
             self.update_transport_comparison(result)
-
             self.export_button.config(state='normal')
 
             # Switch to calculator tab
-
             self.notebook.select(self.calculator_tab)
 
-
         except Exception as e:
-
             messagebox.showerror("Error", f"An error occurred: {str(e)}")
-
-    def create_settings_tab(self):
-        # Load data frame
-        load_frame = ttk.LabelFrame(self.settings_tab, text="Load Data", padding="10")
-        load_frame.pack(pady=20, padx=20, fill=tk.X)
-
-        # File selection
-        file_frame = ttk.Frame(load_frame)
-        file_frame.pack(fill=tk.X, pady=5)
-
-        ttk.Label(file_frame, text="CSV File:").pack(side=tk.LEFT, padx=5)
-        self.file_entry = ttk.Entry(file_frame, textvariable=self.file_path_var)
-        self.file_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
-
-        # Buttons
-        button_frame = ttk.Frame(load_frame)
-        button_frame.pack(fill=tk.X, pady=10)
-
-        browse_button = ttk.Button(button_frame, text="Browse", command=self.browse_file)
-        browse_button.pack(side=tk.LEFT, padx=5)
-
-        load_button = ttk.Button(button_frame, text="Load", command=self.load_matches_data)
-        load_button.pack(side=tk.LEFT, padx=5)
-
-        save_button = ttk.Button(button_frame, text="Save Settings", command=self.save_settings)
-        save_button.pack(side=tk.RIGHT, padx=5)
-
-        # Status label
-        self.matches_status = ttk.Label(load_frame, text="")
-        self.matches_status.pack(pady=5)
-
-    def _load_initial_data(self):
-        """Load initial data from settings or default file"""
-        try:
-            if os.path.exists(self.settings_file):
-                with open(self.settings_file, 'r') as f:
-                    settings = json.load(f)
-                    last_csv = settings.get('last_csv')
-                    if last_csv and os.path.exists(last_csv):
-                        self.file_path_var.set(last_csv)
-                        self.load_matches_data()
-                        return
-
-            if os.path.exists('cleaned_matches.csv'):
-                self.file_path_var.set('cleaned_matches.csv')
-                self.load_matches_data()
-        except Exception as e:
-            print(f"Error loading initial data: {e}")
-
-    def load_matches_data(self):
-        """Load match data from CSV"""
-        try:
-            file_path = self.file_path_var.get()
-            if not file_path:
-                raise ValueError("Please select a CSV file")
-
-            data = pd.read_csv(file_path)
-
-            required_cols = ['Home Team', 'Away Team', 'Competition']
-            if not all(col in data.columns for col in required_cols):
-                raise ValueError("Missing required columns")
-
-            self.original_matches_data = data.copy()
-            self.matches_data = data.copy()
-
-            self.update_analysis_display()
-
-            self.matches_status.config(
-                text=f"Loaded {len(data)} matches",
-                foreground='green'
-            )
-
-        except Exception as e:
-            self.matches_status.config(
-                text=f"Error: {str(e)}",
-                foreground='red'
-            )
-            messagebox.showerror("Error", f"Failed to load matches: {str(e)}")
-
-    def format_number(self, value):
-        """Format numbers with commas"""
-        try:
-            if isinstance(value, str):
-                value = float(value)
-            if isinstance(value, (int, float)):
-                if value.is_integer():
-                    return f"{int(value):,}"
-                return f"{value:,.2f}"
-            return value
-        except (ValueError, AttributeError):
-            return value
 
     def update_analysis_display(self):
         if self.matches_data is None:
@@ -993,7 +910,6 @@ class MainWindow(tk.Tk):
                 "Summary.Treeview.Heading",
                 background=COLORS['bg_primary'],  # Use accent color from COLORS
                 foreground=COLORS['text_primary'],  # Use text color from COLORS
-
             )
 
             for comp_name, group in competitions:
@@ -1080,253 +996,131 @@ class MainWindow(tk.Tk):
         except Exception as e:
             messagebox.showerror("Analysis Error", f"Error updating analysis: {str(e)}")
             raise
-    def on_round_trip_toggle(self):
 
-        """Recalculate emissions when round trip toggle changes"""
+    # Section 5: Settings and Utilities
+    def create_settings_tab(self):
+        """Create settings tab contents"""
+        # Load data frame
+        load_frame = ttk.LabelFrame(self.settings_tab, text="Load Data", padding="10")
+        load_frame.pack(pady=20, padx=20, fill=tk.X)
 
+        # File selection
+        file_frame = ttk.Frame(load_frame)
+        file_frame.pack(fill=tk.X, pady=5)
+
+        ttk.Label(file_frame, text="CSV File:").pack(side=tk.LEFT, padx=5)
+        self.file_entry = ttk.Entry(file_frame, textvariable=self.file_path_var)
+        self.file_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
+
+        # Buttons
+        button_frame = ttk.Frame(load_frame)
+        button_frame.pack(fill=tk.X, pady=10)
+
+        browse_button = ttk.Button(button_frame, text="Browse", command=self.browse_file)
+        browse_button.pack(side=tk.LEFT, padx=5)
+
+        load_button = ttk.Button(button_frame, text="Load", command=self.load_matches_data)
+        load_button.pack(side=tk.LEFT, padx=5)
+
+        save_button = ttk.Button(button_frame, text="Save Settings", command=self.save_settings)
+        save_button.pack(side=tk.RIGHT, padx=5)
+
+        # Status label
+        self.matches_status = ttk.Label(load_frame, text="")
+        self.matches_status.pack(pady=5)
+
+    def _load_initial_data(self):
+        """Load initial data from settings or default file"""
         try:
+            if os.path.exists(self.settings_file):
+                with open(self.settings_file, 'r') as f:
+                    settings = json.load(f)
+                    last_csv = settings.get('last_csv')
+                    if last_csv and os.path.exists(last_csv):
+                        self.file_path_var.set(last_csv)
+                        self.load_matches_data()
+                        return
 
-            if self.home_team_entry.get() and self.away_team_entry.get():
-                self.calculate()  # This will trigger a full recalculation
+            if os.path.exists('cleaned_matches.csv'):
+                self.file_path_var.set('cleaned_matches.csv')
+                self.load_matches_data()
+        except Exception as e:
+            print(f"Error loading initial data: {e}")
+
+    def load_matches_data(self):
+        """Load match data from CSV"""
+        try:
+            file_path = self.file_path_var.get()
+            if not file_path:
+                raise ValueError("Please select a CSV file")
+
+            data = pd.read_csv(file_path)
+
+            required_cols = ['Home Team', 'Away Team', 'Competition']
+            if not all(col in data.columns for col in required_cols):
+                raise ValueError("Missing required columns")
+
+            self.original_matches_data = data.copy()
+            self.matches_data = data.copy()
+
+            self.update_analysis_display()
+
+            self.matches_status.config(
+                text=f"Loaded {len(data)} matches",
+                foreground='green'
+            )
 
         except Exception as e:
+            self.matches_status.config(
+                text=f"Error: {str(e)}",
+                foreground='red'
+            )
+            messagebox.showerror("Error", f"Failed to load matches: {str(e)}")
 
-            messagebox.showerror("Error", f"Error updating results: {str(e)}")
+    def browse_file(self):
+        """Open file dialog to select CSV file"""
+        filename = filedialog.askopenfilename(
+            title="Select Matches File",
+            filetypes=[
+                ("CSV files", "*.csv"),
+                ("All files", "*.*")
+            ]
+        )
+        if filename:
+            self.file_path_var.set(filename)
+            self.load_matches_data()
 
-    def on_passengers_change(self, *args):
-
-        """Recalculate emissions when passenger count changes"""
-
-        if hasattr(self, 'latest_result'):
-            self.calculate()
-
-    def calculate(self):
-
-        """Calculate emissions for selected teams"""
-
+    def save_settings(self):
+        """Save current settings to file"""
         try:
-
-            # Get inputs
-
-            home_team = self.home_team_entry.get()
-
-            away_team = self.away_team_entry.get()
-
-            passengers = int(self.passengers_entry.get())
-
-            is_round_trip = self.round_trip_var.get()
-
-            # Validate inputs
-
-            if not home_team or not away_team:
-                raise ValueError("Please enter both home and away teams")
-
-            # Get airports
-
-            home_airport = get_team_airport(home_team)
-
-            away_airport = get_team_airport(away_team)
-
-            if not home_airport or not away_airport:
-                raise ValueError("Airport not found for one or both teams")
-
-            # Get coordinates
-
-            home_coords = get_airport_coordinates(home_airport)
-
-            away_coords = get_airport_coordinates(away_airport)
-
-            if not home_coords or not away_coords:
-                raise ValueError("Coordinates not found for one or both airports")
-
-            # Calculate distance first
-
-            distance = calculate_distance(
-
-                home_coords['lat'],
-
-                home_coords['lon'],
-
-                away_coords['lat'],
-
-                away_coords['lon']
-
-            )
-
-            # Calculate emissions using ICAO calculator
-
-            result_dict = self.calculator.icao_calculator.calculate_emissions(
-
-                distance_km=distance,
-
-                aircraft_type="A320",
-
-                cabin_class="business",
-
-                passengers=passengers,
-
-                cargo_tons=2.0,
-
-                is_international=True
-
-            )
-
-            # Adjust for round trip if needed
-
-            if is_round_trip:
-                result_dict["emissions_total_kg"] *= 2
-
-                result_dict["emissions_per_pax_kg"] *= 2
-
-                distance *= 2
-
-            # Create EmissionsResult object
-
-            result = EmissionsResult(
-
-                total_emissions=result_dict['emissions_total_kg'] / 1000,
-
-                per_passenger=result_dict['emissions_per_pax_kg'] / 1000,
-
-                distance_km=distance,
-
-                corrected_distance_km=result_dict['corrected_distance_km'],
-
-                fuel_consumption=result_dict['fuel_consumption_kg'],
-
-                flight_type=determine_mileage_type(distance),
-
-                is_round_trip=is_round_trip,
-
-                additional_data=result_dict['factors_applied']
-
-            )
-
-            # Store as latest result and update display
-
-            self.latest_result = result
-
-            self.display_results(result, home_team, away_team)
-
-            self.update_transport_comparison(result)
-
-            self.export_button.config(state='normal')
-
-
-        except Exception as e:
-
-            messagebox.showerror("Error", str(e))
-
-            self.last_error = str(e)
-
-            self.copy_error_button.config(state='normal')
-
-    def display_results(self, result, home_team, away_team):
-        self.result_text.delete(1.0, tk.END)
-
-        # Header
-
-        self.result_text.insert(tk.END, "✈️ Flight Details\n", 'header')
-
-        self.result_text.insert(tk.END, "─" * 80 + "\n\n")  # Using softer separator
-
-        # Configure tags for styling
-
-        self.result_text.tag_configure('header',
-
-                                       font=('Segoe UI', 12, 'bold'),
-
-                                       foreground=COLORS['accent']
-
-                                       )
-
-        self.result_text.tag_configure('subheader',
-
-                                       font=('Segoe UI', 11, 'bold'),
-
-                                       foreground=COLORS['accent_light']
-
-                                       )
-
-        self.result_text.tag_configure('normal',
-
-                                       font=('Segoe UI', 10),
-
-                                       foreground=COLORS['text_primary']
-
-                                       )
-
-        # Flight Details Section
-        self.result_text.insert(tk.END, "🛫 Flight Details\n")
-        self.result_text.insert(tk.END, "-" * 40 + "\n")
-        self.result_text.insert(tk.END, f"🏠 Home Team: {home_team} \n    Airport: {get_team_airport(home_team)}\n")
-        self.result_text.insert(tk.END, f"🏃 Away Team: {away_team} \n    Airport: {get_team_airport(away_team)}\n")
-        self.result_text.insert(tk.END, f"📏 Distance: {result.distance_km:,.1f} km\n")
-        self.result_text.insert(tk.END, f"✈️ Flight Type: {result.flight_type}\n")
-        self.result_text.insert(tk.END, f"🔄 Round Trip: {'Yes ↔️' if result.is_round_trip else 'No →'}\n\n")
-
-        # Emissions Section
-        self.result_text.insert(tk.END, "🌡️ Emissions Results\n")
-        self.result_text.insert(tk.END, "-" * 40 + "\n")
-        self.result_text.insert(tk.END, f"📊 Total CO2: {result.total_emissions:,.2f} metric tons\n")
-        self.result_text.insert(tk.END, f"👤 Per Passenger: {result.per_passenger:,.2f} metric tons\n\n")
-
-        # Environmental Equivalencies Section
-        self.result_text.insert(tk.END, "🌍 Environmental Impact Equivalencies\n")
-        self.result_text.insert(tk.END, "-" * 40 + "\n")
-
-        # Calculate equivalencies
-        equivalencies = calculate_equivalencies(result.total_emissions)
-
-        # Organize equivalencies by category
-        categories = {
-            "🚗 Transportation Impact": {
-                'gasoline_vehicles_year': "Gasoline vehicles driven for one year",
-                'electric_vehicles_year': "Electric vehicles driven for one year",
-                'gasoline_vehicle_miles': "Miles driven by gasoline vehicle"
-            },
-            "⚡ Energy Usage": {
-                'homes_energy_year': "Homes' energy use for one year",
-                'homes_electricity_year': "Homes' electricity use for one year",
-                'smartphones_charged': "Smartphones charged"
-            },
-            "🌳 Environmental Offset": {
-                'tree_seedlings_10years': "Tree seedlings grown for 10 years",
-                'forest_acres_year': "Acres of U.S. forests in one year",
-                'forest_preserved_acres': "Acres of U.S. forests preserved"
-            },
-            "♻️ Waste & Resources": {
-                'waste_tons_recycled': "Tons of waste recycled",
-                'garbage_trucks_recycled': "Garbage trucks of waste recycled",
-                'trash_bags_recycled': "Trash bags of waste recycled"
-            },
-            "⛽ Fuel Equivalents": {
-                'gasoline_gallons': "Gallons of gasoline",
-                'diesel_gallons': "Gallons of diesel",
-                'propane_cylinders': "Propane cylinders for BBQ",
-                'oil_barrels': "Barrels of oil"
+            settings = {
+                'last_csv': self.file_path_var.get()
             }
-        }
+            with open(self.settings_file, 'w') as f:
+                json.dump(settings, f)
 
-        # Display equivalencies by category
-        for category, items in categories.items():
-            self.result_text.insert(tk.END, f"\n{category}\n")
-            self.result_text.insert(tk.END, "-" * 30 + "\n")
-            for key, description in items.items():
-                if key in equivalencies:
-                    value = equivalencies[key]
-                    formatted_value = f"{value:,.2f}"
-                    self.result_text.insert(tk.END, f"  • {formatted_value} {description}\n")
+            self.matches_status.config(
+                text="Settings saved successfully",
+                foreground='green'
+            )
+        except Exception as e:
+            self.matches_status.config(
+                text=f"Error saving settings: {str(e)}",
+                foreground='red'
+            )
 
-        # Footer
-        self.result_text.insert(tk.END, "\n" + "=" * 80 + "\n")
-        self.result_text.insert(tk.END, "💡 This report helps visualize the environmental impact of the flight\n")
-        self.result_text.insert(tk.END, "🌱 Consider sustainable alternatives when possible\n")
-
-        # Enable export button if it exists
-        if hasattr(self, 'export_button'):
-            self.export_button.config(state='normal')
-
+    def format_number(self, value):
+        """Format numbers with commas"""
+        try:
+            if isinstance(value, str):
+                value = float(value)
+            if isinstance(value, (int, float)):
+                if value.is_integer():
+                    return f"{int(value):,}"
+                return f"{value:,.2f}"
+            return value
+        except (ValueError, AttributeError):
+            return value
 
     def export_to_csv(self):
         """Export analysis results to CSV"""
@@ -1369,38 +1163,6 @@ class MainWindow(tk.Tk):
 
             except Exception as e:
                 messagebox.showerror("Export Error", f"Error exporting data: {str(e)}")
-
-    def browse_file(self):
-        """Open file dialog to select CSV file"""
-        filename = filedialog.askopenfilename(
-            title="Select Matches File",
-            filetypes=[
-                ("CSV files", "*.csv"),
-                ("All files", "*.*")
-            ]
-        )
-        if filename:
-            self.file_path_var.set(filename)
-            self.load_matches_data()
-
-    def save_settings(self):
-        """Save current settings to file"""
-        try:
-            settings = {
-                'last_csv': self.file_path_var.get()
-            }
-            with open(self.settings_file, 'w') as f:
-                json.dump(settings, f)
-
-            self.matches_status.config(
-                text="Settings saved successfully",
-                foreground='green'
-            )
-        except Exception as e:
-            self.matches_status.config(
-                text=f"Error saving settings: {str(e)}",
-                foreground='red'
-            )
 
 if __name__ == "__main__":
     app = MainWindow()
