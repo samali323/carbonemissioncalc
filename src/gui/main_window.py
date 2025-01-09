@@ -13,6 +13,7 @@ from src.config.constants import (
     DEFAULT_PASSENGERS, EMISSION_FACTORS, TRANSPORT_MODES, SOCIAL_CARBON_COSTS,
     CARBON_PRICES_EUR, EU_ETS_PRICE
 )
+from src.dashboard.dashboard_connector import DashboardConnector
 from src.data.team_data import get_team_airport, get_airport_coordinates, TEAM_COUNTRIES
 from src.gui.theme import COLORS
 from src.gui.widgets.auto_complete import TeamAutoComplete, CompetitionAutoComplete
@@ -95,6 +96,8 @@ class MainWindow(tk.Tk):
         self.calculator_tab = ttk.Frame(self.notebook, padding=10)
         self.analysis_tab = ttk.Frame(self.notebook, padding=10)
         self.settings_tab = ttk.Frame(self.notebook, padding=10)
+        self.dashboard_connector = DashboardConnector()
+        self.dashboard_connector.start_dashboard(self)
 
         # Add tabs to notebook
         self.notebook.add(self.calculator_tab, text='Calculator')
@@ -202,6 +205,15 @@ class MainWindow(tk.Tk):
         )
         self.export_button.pack(side=tk.LEFT, padx=5)
 
+        # Dashboard button
+        self.dashboard_button = ttk.Button(
+            button_frame,
+            text="Open Dashboard",
+            command=self.handle_dashboard_click,
+            state='enabled'  # Initially disabled
+        )
+        self.dashboard_button.pack(side=tk.LEFT, padx=5)
+
         # Results frame
         right_frame = ttk.Frame(self.calculator_tab, padding="10")
         right_frame.grid(row=0, column=1, sticky=(tk.W, tk.E, tk.N, tk.S))
@@ -220,11 +232,35 @@ class MainWindow(tk.Tk):
             pady=10
         )
         self.result_text.pack(fill='both', expand=True)
+        # Add bindings for team selection
+
+        self.home_team_entry.bind('<<ComboboxSelected>>', self.on_team_selection)
+        self.away_team_entry.bind('<<ComboboxSelected>>', self.on_team_selection)
 
         # Configure grid weights
         self.calculator_tab.columnconfigure(1, weight=1)
         self.calculator_tab.rowconfigure(0, weight=1)
 
+    def on_team_selection(self, event=None):
+
+        """Handle team selection and automatically calculate emissions"""
+
+        home_team = self.home_team_entry.get()
+
+        away_team = self.away_team_entry.get()
+
+        if home_team and away_team:  # Only proceed if both teams are selected
+
+            try:
+
+                self.calculate()  # Calculate emissions
+
+                if hasattr(self, 'latest_result'):
+                    self.dashboard_connector.open_dashboard_browser()
+
+            except Exception as e:
+
+                messagebox.showerror("Error", str(e))
     def on_round_trip_toggle(self):
         """Recalculate emissions when round trip toggle changes"""
         try:
@@ -237,6 +273,42 @@ class MainWindow(tk.Tk):
         """Recalculate emissions when passenger count changes"""
         if hasattr(self, 'latest_result'):
             self.calculate()
+
+    def handle_dashboard_click(self):
+        """Handle dashboard button click"""
+        if hasattr(self, 'latest_result'):
+            self.dashboard_connector.open_dashboard_browser()
+        else:
+            messagebox.showwarning("No Data", "Please calculate emissions first")
+
+    def open_dashboard(self):
+        try:
+            import webbrowser
+            import json
+            import tempfile
+            import os
+            # Prepare data for dashboard
+            if hasattr(self, 'latest_result'):
+                dashboard_data = {
+                    'home_team': self.home_team_entry.get(),
+                    'away_team': self.away_team_entry.get(),
+                    'total_emissions': self.latest_result.total_emissions,
+                    'per_passenger': self.latest_result.per_passenger,
+                    'distance': self.latest_result.distance_km,
+                    'is_round_trip': self.latest_result.is_round_trip,
+                    'flight_type': self.latest_result.flight_type
+                }
+                # Save data to temp file
+                temp_dir = tempfile.gettempdir()
+                data_file = os.path.join(temp_dir, 'dashboard_data.json')
+                with open(data_file, 'w') as f:
+                    json.dump(dashboard_data, f)
+                # Open dashboard URL
+                webbrowser.open('http://127.0.0.1:8050/')
+            else:
+                messagebox.showwarning("No Data", "Please calculate emissions first")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to open dashboard: {str(e)}")
 
     def calculate(self):
         """Calculate emissions for selected teams"""
@@ -301,14 +373,28 @@ class MainWindow(tk.Tk):
             )
 
             # Store and update display
+
+            # Store and update display
+
             self.latest_result = result
+
             self.display_results(result, home_team, away_team)
+
             self.update_transport_comparison(result)
+
             self.export_button.config(state='normal')
 
+            # Update dashboard data
+
+            self.dashboard_connector.update_dashboard_data(self)
+
+
         except Exception as e:
+
             messagebox.showerror("Error", str(e))
+
             self.last_error = str(e)
+
             self.copy_error_button.config(state='normal')
 
     # Section 3 (continued): Calculator Tab and Emissions Calculations
@@ -569,6 +655,93 @@ class MainWindow(tk.Tk):
         # Enable export button if it exists
         if hasattr(self, 'export_button'):
             self.export_button.config(state='normal')
+
+        # Add dashboard button at the bottom
+
+        self.result_text.insert(tk.END, "\n\n")
+
+        self.result_text.insert(tk.END, "📊 View Interactive Dashboard", "dashboard_link")
+
+        # Configure tag for dashboard link
+
+        self.result_text.tag_configure(
+
+            "dashboard_link",
+
+            foreground=COLORS['accent'],
+
+            font=('Segoe UI', 10, 'underline'),
+
+            justify='center'
+
+        )
+
+        # Bind click event to dashboard link
+
+        self.result_text.tag_bind(
+
+            "dashboard_link",
+
+            '<Button-1>',
+
+            lambda e: self.open_dashboard(result)
+
+        )
+
+        # Change cursor on hover
+
+        self.result_text.tag_bind(
+
+            "dashboard_link",
+
+            '<Enter>',
+
+            lambda e: self.result_text.configure(cursor="hand2")
+
+        )
+
+        self.result_text.tag_bind(
+
+            "dashboard_link",
+
+            '<Leave>',
+
+            lambda e: self.result_text.configure(cursor="")
+
+        )
+
+    def open_dashboard(self, result):
+        """Open the Dash dashboard with current calculation results"""
+        try:
+            # Prepare data for dashboard
+            dashboard_data = {
+                'total_emissions': result.total_emissions,
+                'per_passenger': result.per_passenger,
+                'distance_km': result.distance_km,
+                'flight_type': result.flight_type,
+                'is_round_trip': result.is_round_trip,
+                'home_team': self.home_team_entry.get(),
+                'away_team': self.away_team_entry.get(),
+                'passengers': int(self.passengers_entry.get())
+            }
+
+            # Save data to temporary file for dashboard to read
+            import json
+            import tempfile
+            import webbrowser
+            import os
+
+            temp_dir = tempfile.gettempdir()
+            data_file = os.path.join(temp_dir, 'dashboard_data.json')
+
+            with open(data_file, 'w') as f:
+                json.dump(dashboard_data, f)
+
+            # Open dashboard URL
+            webbrowser.open('http://127.0.0.1:8050/')
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to open dashboard: {str(e)}")
 
     # Section 4: Analysis Tab and Data Processing
 

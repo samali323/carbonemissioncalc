@@ -1,5 +1,11 @@
 # main.py
-"""Main entry point for the application."""
+import threading
+
+import webbrowser
+
+import requests
+
+from tkinter import ttk, messagebox
 from src.gui.main_window import MainWindow
 
 
