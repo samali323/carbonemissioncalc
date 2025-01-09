@@ -10,6 +10,16 @@ import requests
 
 from src.utils.calculations import calculate_transport_emissions, calculate_equivalencies
 
+import threading
+import webbrowser
+import json
+import tempfile
+import os
+import time
+import requests
+from tkinter import ttk
+from src.dashboard.app import DashboardApp
+
 
 class DashboardConnector:
     def __init__(self):
@@ -19,6 +29,7 @@ class DashboardConnector:
         self.temp_dir = tempfile.gettempdir()
         self.data_file = os.path.join(self.temp_dir, 'dashboard_data.json')
         self.status_label = None
+        self.browser_opened = False
 
     def start_dashboard(self, main_window):
         """Start the dashboard server"""
@@ -57,37 +68,31 @@ class DashboardConnector:
         except Exception as e:
             print(f"Dashboard error: {str(e)}")
 
-    def update_status(self):
-        """Update dashboard status label"""
-        try:
-            # Test if dashboard is responding
-            requests.get('http://127.0.0.1:8050', timeout=1)
-            if self.status_label:
-                self.status_label.config(
-                    text="Dashboard Status: Running ✓",
-                    foreground="green"
-                )
-        except:
-            if self.status_label:
-                self.status_label.config(
-                    text="Dashboard Status: Not Connected ✗",
-                    foreground="red"
-                )
-
     def open_dashboard_browser(self):
         """Open the dashboard in the default web browser"""
         try:
-            # Wait briefly to ensure server is ready
-            if not self.server_running:
-                time.sleep(2)
-            webbrowser.open('http://127.0.0.1:8050')
+            # Check if server is running
+            response = requests.get('http://127.0.0.1:8050', timeout=1)
+            if response.status_code == 200:
+                webbrowser.open('http://127.0.0.1:8050')
+                self.browser_opened = True
+            else:
+                print("Dashboard server not responding")
         except Exception as e:
             print(f"Error opening dashboard: {str(e)}")
+            # Try to start server if it's not running
+            if not self.server_running:
+                print("Attempting to restart dashboard server...")
+                self.start_dashboard(None)
+                time.sleep(2)  # Wait for server to start
+                webbrowser.open('http://127.0.0.1:8050')
 
     def update_dashboard_data(self, main_window):
         """Update dashboard data from main window"""
         try:
             if hasattr(main_window, 'latest_result'):
+                from src.utils.calculations import calculate_transport_emissions, calculate_equivalencies
+
                 dashboard_data = {
                     'total_emissions': main_window.latest_result.total_emissions,
                     'per_passenger': main_window.latest_result.per_passenger,
@@ -96,14 +101,14 @@ class DashboardConnector:
                     'is_round_trip': main_window.latest_result.is_round_trip,
                     'home_team': main_window.home_team_entry.get(),
                     'away_team': main_window.away_team_entry.get(),
-                    'passengers': int(main_window.passengers_entry.get()),
-                    # Add additional data for grids
                     'transport_comparison': {
                         'air': main_window.latest_result.total_emissions,
-                        'rail': calculate_transport_emissions('rail', main_window.latest_result.distance_km,
+                        'rail': calculate_transport_emissions('rail',
+                                                              main_window.latest_result.distance_km,
                                                               int(main_window.passengers_entry.get()),
                                                               main_window.latest_result.is_round_trip),
-                        'bus': calculate_transport_emissions('bus', main_window.latest_result.distance_km,
+                        'bus': calculate_transport_emissions('bus',
+                                                             main_window.latest_result.distance_km,
                                                              int(main_window.passengers_entry.get()),
                                                              main_window.latest_result.is_round_trip)
                     },
@@ -114,9 +119,28 @@ class DashboardConnector:
                 with open(self.data_file, 'w') as f:
                     json.dump(dashboard_data, f)
 
-                # Update dashboard display
-                if hasattr(self, 'dashboard') and self.dashboard:
-                    self.dashboard.update_data(dashboard_data)
+                # Open browser if not already opened
+                if not self.browser_opened:
+                    self.open_dashboard_browser()
 
         except Exception as e:
             print(f"Error updating dashboard data: {str(e)}")
+
+    def update_status(self):
+        """Update dashboard status label"""
+        try:
+            response = requests.get('http://127.0.0.1:8050', timeout=1)
+            if response.status_code == 200:
+                if self.status_label:
+                    self.status_label.config(
+                        text="Dashboard Status: Running ✓",
+                        foreground="green"
+                    )
+                self.server_running = True
+        except:
+            if self.status_label:
+                self.status_label.config(
+                    text="Dashboard Status: Not Connected ✗",
+                    foreground="red"
+                )
+            self.server_running = False
