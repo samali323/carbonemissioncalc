@@ -213,7 +213,7 @@ class MainWindow(tk.Tk):
             height=30,
             bg=COLORS['bg_secondary'],
             fg=COLORS['text_primary'],
-            font=('Segoe UI', 10),
+            font=('Courier', 10), # Using Courier monospace font
             relief='solid',
             borderwidth=1,
             padx=10,
@@ -484,12 +484,8 @@ class MainWindow(tk.Tk):
 
     def display_results(self, result, home_team, away_team):
         """Display calculation results in the results text widget"""
+
         self.result_text.delete(1.0, tk.END)
-
-        # Header
-        self.result_text.insert(tk.END, "✈️ Flight Details\n", 'header')
-        self.result_text.insert(tk.END, "─" * 80 + "\n\n")  # Using softer separator
-
         # Configure tags for styling
         self.result_text.tag_configure('header',
                                        font=('Segoe UI', 12, 'bold'),
