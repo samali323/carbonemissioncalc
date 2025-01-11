@@ -5,6 +5,17 @@ from src.data.team_data import get_team_airport, get_airport_coordinates
 from src.utils.calculations import calculate_distance
 
 
+def calculate_flight_time(distance_km: float) -> int:
+    """Calculate flight time in seconds based on distance."""
+    MINIMUM_FLIGHT_TIME = 30 * 60  # 30 minutes in seconds for takeoff/landing
+    CRUISE_SPEED = 800  # km/h
+
+    # Calculate flight time: minimum time + cruise time
+    cruise_time = (distance_km / CRUISE_SPEED) * 3600  # Convert to seconds
+    total_time = MINIMUM_FLIGHT_TIME + cruise_time
+
+    return int(total_time)
+
 def calculate_driving_time(distance_km: float) -> int:
     """Calculate driving time in seconds based on distance with 30 minute minimum."""
     MINIMUM_DRIVING_TIME = 30 * 60  # 30 minutes in seconds

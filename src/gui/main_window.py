@@ -4,8 +4,9 @@ from __future__ import annotations
 import json
 import os
 import tkinter as tk
+from dbm import sqlite3
 from tkinter import ttk, messagebox, filedialog
-
+import sqlite3
 import pandas as pd
 
 # Application-specific imports
@@ -21,6 +22,7 @@ from src.models.emissions import EmissionsCalculator, EmissionsResult
 from src.utils.calculations import (
     calculate_transport_emissions, calculate_equivalencies, calculate_distance, determine_mileage_type
 )
+from src.utils.route_fixer import calculate_flight_time, calculate_driving_time
 
 
 # Section 2: Main Window Class Definition and Core UI Setup
@@ -30,12 +32,16 @@ class MainWindow(tk.Tk):
 
         self.title("Football Team Flight Emissions Calculator")
         self.geometry("1200x800")
+
+        # Get project root and set up database connection
+        self.project_root = os.path.abspath(os.path.join(
+            os.path.dirname(__file__),
+            "..",
+            ".."
+        ))
+        self.db_path = os.path.join(self.project_root, "data", "routes.db")
+
         # Configure color scheme
-
-        self.title("Football Team Flight Emissions Calculator")
-        self.geometry("1200x800")
-
-        # Configure the root window background
         self.configure(bg=COLORS['bg_primary'])
 
         # Configure styles
@@ -60,6 +66,11 @@ class MainWindow(tk.Tk):
         style.configure('TLabel', background=COLORS['bg_primary'], foreground=COLORS['text_primary'])
         style.configure('TButton', background=COLORS['accent'])
         style.configure('Custom.TEntry', fieldbackground=COLORS['entry_bg'])
+
+        # Initialize calculator and data storage
+        self.calculator = EmissionsCalculator()
+        self.matches_data = None
+        self.original_matches_data = None
 
         # Configure text widget style
         self.option_add('*Text*Background', COLORS['bg_secondary'])
@@ -398,37 +409,88 @@ class MainWindow(tk.Tk):
             self.copy_error_button.config(state='normal')
 
     # Section 3 (continued): Calculator Tab and Emissions Calculations
+    @staticmethod
+    def format_stored_time(seconds):
+        """Format time in seconds to a human readable string."""
+        if seconds is None:
+            return "N/A"
+        hours = seconds // 3600
+        minutes = (seconds % 3600) // 60
+        if hours == 0:
+            return f"{minutes} minutes"
+        elif minutes == 0:
+            return f"{hours} hours"
+        else:
+            return f"{hours} hours {minutes} minutes"
 
     def update_transport_comparison(self, result):
-        """Update transport mode comparison with comprehensive SCC analysis"""
+        """Update transport mode comparison with comprehensive analysis"""
         away_team = self.away_team_entry.get()
+        home_team = self.home_team_entry.get()
         away_country = TEAM_COUNTRIES.get(away_team, 'EU')
         carbon_price = CARBON_PRICES_EUR.get(away_country, EU_ETS_PRICE)
+
+        # Get stored route information from database
+        try:
+            # Use sqlite3.connect directly, not dbm.sqlite3
+            import sqlite3
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+
+            cursor.execute("""
+                SELECT driving_duration, transit_duration, driving_distance, transit_distance
+                FROM routes 
+                WHERE home_team = ? AND away_team = ?
+            """, (home_team, away_team))
+
+            row = cursor.fetchone()
+            conn.close()
+
+            if row:
+                driving_duration, transit_duration, driving_distance, transit_distance = row
+
+                # Convert stored distances from meters to kilometers
+                driving_km = driving_distance / 1000 if driving_distance else 0
+                transit_km = transit_distance / 1000 if transit_distance else 0
+
+                driving_time = MainWindow.format_stored_time(driving_duration)
+                transit_time = MainWindow.format_stored_time(transit_duration)
+            else:
+                driving_time = "N/A"
+                transit_time = "N/A"
+                driving_km = 0
+                transit_km = 0
+
+        except Exception as e:
+            print(f"Database error: {str(e)}")
+            driving_time = "N/A"
+            transit_time = "N/A"
+            driving_km = 0
+            transit_km = 0
 
         # Calculate emissions for each mode
         air_emissions = result.total_emissions
         base_distance = result.distance_km
 
-        rail_distance = (base_distance / (2 if self.round_trip_var.get() else 1)) * TRANSPORT_MODES['rail'][
-            'distance_multiplier']
-        bus_distance = (base_distance / (2 if self.round_trip_var.get() else 1)) * TRANSPORT_MODES['bus'][
-            'distance_multiplier']
+        # Calculate rail and bus emissions using stored distances when available
+        rail_emissions = calculate_transport_emissions('rail', transit_km or base_distance,
+                                                    int(self.passengers_entry.get()),
+                                                    self.round_trip_var.get())
+        bus_emissions = calculate_transport_emissions('bus', driving_km or base_distance,
+                                                   int(self.passengers_entry.get()),
+                                                   self.round_trip_var.get())
 
-        if self.round_trip_var.get():
-            rail_distance *= 2
-            bus_distance *= 2
-
-        rail_emissions = calculate_transport_emissions('rail', rail_distance, int(self.passengers_entry.get()),
-                                                       self.round_trip_var.get())
-        bus_emissions = calculate_transport_emissions('bus', bus_distance, int(self.passengers_entry.get()),
-                                                      self.round_trip_var.get())
+        # Calculate flight time
+        flight_time = calculate_flight_time(base_distance)
+        flight_time_str = MainWindow.format_stored_time(flight_time)
 
         # Transport Mode Comparison table
         self.result_text.insert(tk.END, "\nTransport Mode Comparison:\n")
-        self.result_text.insert(tk.END, "=" * 70 + "\n")
+        self.result_text.insert(tk.END, "=" * 90 + "\n")
 
         # Column widths
         mode_width = 15
+        time_width = 20
         dist_width = 15
         co2_width = 15
         saved_width = 15
@@ -436,30 +498,33 @@ class MainWindow(tk.Tk):
         # Header with vertical lines
         header = (
             f"| {'Mode':^{mode_width}} "
+            f"| {'Est. Travel Time':^{time_width}} "
             f"| {'Distance (km)':^{dist_width}} "
             f"| {'CO2 (t)':^{co2_width}} "
             f"| {'CO2 Saved (t)':^{saved_width}} |\n"
         )
         self.result_text.insert(tk.END, header)
-        self.result_text.insert(tk.END, "|" + "-" * (mode_width + 2) + "|" + "-" * (dist_width + 2) +
-                                "|" + "-" * (co2_width + 2) + "|" + "-" * (saved_width + 2) + "|\n")
+        self.result_text.insert(tk.END, "|" + "-" * (mode_width + 2) + "|" + "-" * (time_width + 2) +
+                              "|" + "-" * (dist_width + 2) + "|" + "-" * (co2_width + 2) + "|" + "-" * (saved_width + 2) + "|\n")
 
         # Data rows with vertical lines
         modes_data = [
-            ("Air", base_distance, air_emissions, None),
-            ("Rail", rail_distance, rail_emissions, air_emissions - rail_emissions),
-            ("Bus", bus_distance, bus_emissions, air_emissions - bus_emissions)
+            ("Air", flight_time_str, base_distance, air_emissions, None),
+            ("Rail", transit_time, transit_km or base_distance, rail_emissions, air_emissions - rail_emissions),
+            ("Bus", driving_time, driving_km or base_distance, bus_emissions, air_emissions - bus_emissions)
         ]
 
-        for mode, dist, co2, saved in modes_data:
+        for mode, time, dist, co2, saved in modes_data:
             saved_str = f"{saved:^{saved_width}.2f}" if saved is not None else " " * saved_width
             row = (
                 f"| {mode:^{mode_width}} "
+                f"| {time:^{time_width}} "
                 f"| {dist:^{dist_width}.1f} "
                 f"| {co2:^{co2_width}.2f} "
                 f"| {saved_str} |\n"
             )
             self.result_text.insert(tk.END, row)
+
 
         self.result_text.insert(tk.END, "=" * 70 + "\n")
 
