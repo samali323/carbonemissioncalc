@@ -20,6 +20,7 @@ if __name__ == "__main__":
 
 
 
-#add economic impact
-#also make sure environmental impacts are accurate
+#see if we can add flight times into the database and pull from there?
+#see why clicking round trip opens the dashboard
+#add player salaries
 #

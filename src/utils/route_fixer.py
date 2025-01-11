@@ -2,59 +2,7 @@ import sqlite3
 import os
 from datetime import datetime
 from src.data.team_data import get_team_airport, get_airport_coordinates
-from src.utils.calculations import calculate_distance
-
-
-def calculate_flight_time(distance_km: float) -> int:
-    """Calculate flight time in seconds based on distance."""
-    MINIMUM_FLIGHT_TIME = 30 * 60  # 30 minutes in seconds for takeoff/landing
-    CRUISE_SPEED = 800  # km/h
-
-    # Calculate flight time: minimum time + cruise time
-    cruise_time = (distance_km / CRUISE_SPEED) * 3600  # Convert to seconds
-    total_time = MINIMUM_FLIGHT_TIME + cruise_time
-
-    return int(total_time)
-
-def calculate_driving_time(distance_km: float) -> int:
-    """Calculate driving time in seconds based on distance with 30 minute minimum."""
-    MINIMUM_DRIVING_TIME = 30 * 60  # 30 minutes in seconds
-
-    # Calculate base time using speeds
-    if distance_km < 50:
-        speed = 40  # km/h for city driving
-    elif distance_km < 100:
-        speed = 60  # km/h for mixed driving
-    elif distance_km < 500:
-        speed = 80  # km/h for highway driving
-    else:
-        speed = 90  # km/h for long distance driving
-
-    calculated_time = int((distance_km / speed) * 3600)  # Convert to seconds
-
-    # Return the larger of calculated time or minimum time
-    return max(calculated_time, MINIMUM_DRIVING_TIME)
-
-
-def calculate_transit_time(distance_km: float) -> int:
-    """Calculate transit time in seconds based on distance with 45 minute minimum."""
-    if distance_km > 500:
-        return None  # Will be stored as NULL in database for N/A
-
-    MINIMUM_TRANSIT_TIME = 45 * 60  # 45 minutes in seconds
-
-    # Calculate base time using speeds
-    if distance_km < 50:
-        speed = 30  # km/h for local transit
-    elif distance_km < 100:
-        speed = 45  # km/h for regional transit
-    else:
-        speed = 60  # km/h for intercity rail
-
-    calculated_time = int((distance_km / speed) * 3600)  # Convert to seconds
-
-    # Return the larger of calculated time or minimum time
-    return max(calculated_time, MINIMUM_TRANSIT_TIME)
+from src.utils.calculations import calculate_distance, calculate_driving_time, calculate_transit_time
 
 
 class RouteFixer:
@@ -187,3 +135,5 @@ if __name__ == "__main__":
     # Print summary after fixing
     print("\nAfter fixing:")
     fixer.print_route_summary()
+
+

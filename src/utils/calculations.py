@@ -193,3 +193,79 @@ def calculate_equivalencies(emissions_mtco2: float) -> Dict[str, float]:
     }
 
 
+def calculate_flight_time(distance_km: float) -> int:
+    """Calculate flight time in seconds based on distance."""
+    MINIMUM_FLIGHT_TIME = 30 * 60  # 30 minutes in seconds for takeoff/landing
+    CRUISE_SPEED = 800  # km/h
+
+    # Calculate flight time: minimum time + cruise time
+    cruise_time = (distance_km / CRUISE_SPEED) * 3600  # Convert to seconds
+    total_time = MINIMUM_FLIGHT_TIME + cruise_time
+
+    return int(total_time)
+
+def calculate_driving_time(distance_km: float) -> int:
+    """Calculate driving time in seconds based on distance with 30 minute minimum."""
+    MINIMUM_DRIVING_TIME = 30 * 60  # 30 minutes in seconds
+
+    # Calculate base time using speeds
+    if distance_km < 50:
+        speed = 40  # km/h for city driving
+    elif distance_km < 100:
+        speed = 60  # km/h for mixed driving
+    elif distance_km < 500:
+        speed = 80  # km/h for highway driving
+    else:
+        speed = 90  # km/h for long distance driving
+
+    calculated_time = int((distance_km / speed) * 3600)  # Convert to seconds
+
+    # Return the larger of calculated time or minimum time
+    return max(calculated_time, MINIMUM_DRIVING_TIME)
+
+
+def calculate_transit_time(distance_km: float) -> int:
+    """Calculate transit time in seconds based on distance with 45 minute minimum."""
+    if distance_km > 500:
+        return None  # Will be stored as NULL in database for N/A
+
+    MINIMUM_TRANSIT_TIME = 45 * 60  # 45 minutes in seconds
+
+    # Calculate base time using speeds
+    if distance_km < 50:
+        speed = 30  # km/h for local transit
+    elif distance_km < 100:
+        speed = 45  # km/h for regional transit
+    else:
+        speed = 60  # km/h for intercity rail
+
+    calculated_time = int((distance_km / speed) * 3600)  # Convert to seconds
+
+    # Return the larger of calculated time or minimum time
+    return max(calculated_time, MINIMUM_TRANSIT_TIME)
+
+
+def calculate_flight_time(distance_km: float, is_round_trip: bool = False) -> int:
+    """Calculate flight time in seconds based on distance.
+    Uses dynamic overhead times based on flight distance."""
+    CRUISE_SPEED = 800  # km/h
+
+    # Dynamic overhead times based on distance
+    if distance_km < 500:  # Short domestic flights
+        OVERHEAD_TIME = 15 * 60  # 15 minutes total overhead for takeoff/landing
+    elif distance_km < 1500:  # Medium flights
+        OVERHEAD_TIME = 20 * 60  # 20 minutes overhead
+    else:  # Long international flights
+        OVERHEAD_TIME = 30 * 60  # 30 minutes overhead
+
+    # Calculate cruise time
+    cruise_time = (distance_km / CRUISE_SPEED) * 3600  # Convert to seconds
+
+    if is_round_trip:
+        # Round trip: double both cruise time and overhead
+        total_time = (cruise_time * 2) + (OVERHEAD_TIME * 2)
+    else:
+        # One way: single cruise time and overhead
+        total_time = cruise_time + OVERHEAD_TIME
+
+    return int(total_time)

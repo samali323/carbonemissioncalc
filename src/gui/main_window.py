@@ -20,9 +20,9 @@ from src.gui.theme import COLORS
 from src.gui.widgets.auto_complete import TeamAutoComplete, CompetitionAutoComplete
 from src.models.emissions import EmissionsCalculator, EmissionsResult
 from src.utils.calculations import (
-    calculate_transport_emissions, calculate_equivalencies, calculate_distance, determine_mileage_type
+    calculate_transport_emissions, calculate_equivalencies, calculate_distance, determine_mileage_type, calculate_flight_time
 )
-from src.utils.route_fixer import calculate_flight_time, calculate_driving_time
+
 
 
 # Section 2: Main Window Class Definition and Core UI Setup
@@ -429,10 +429,10 @@ class MainWindow(tk.Tk):
         home_team = self.home_team_entry.get()
         away_country = TEAM_COUNTRIES.get(away_team, 'EU')
         carbon_price = CARBON_PRICES_EUR.get(away_country, EU_ETS_PRICE)
+        is_round_trip = self.round_trip_var.get()
 
         # Get stored route information from database
         try:
-            # Use sqlite3.connect directly, not dbm.sqlite3
             import sqlite3
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
@@ -448,6 +448,13 @@ class MainWindow(tk.Tk):
 
             if row:
                 driving_duration, transit_duration, driving_distance, transit_distance = row
+
+                # Double durations if round trip
+                if is_round_trip:
+                    driving_duration = driving_duration * 2 if driving_duration else None
+                    transit_duration = transit_duration * 2 if transit_duration else None
+                    driving_distance = driving_distance * 2 if driving_distance else 0
+                    transit_distance = transit_distance * 2 if transit_distance else 0
 
                 # Convert stored distances from meters to kilometers
                 driving_km = driving_distance / 1000 if driving_distance else 0
@@ -475,13 +482,13 @@ class MainWindow(tk.Tk):
         # Calculate rail and bus emissions using stored distances when available
         rail_emissions = calculate_transport_emissions('rail', transit_km or base_distance,
                                                     int(self.passengers_entry.get()),
-                                                    self.round_trip_var.get())
+                                                    is_round_trip)
         bus_emissions = calculate_transport_emissions('bus', driving_km or base_distance,
                                                    int(self.passengers_entry.get()),
-                                                   self.round_trip_var.get())
+                                                   is_round_trip)
 
-        # Calculate flight time
-        flight_time = calculate_flight_time(base_distance)
+        # Calculate flight time with round trip handling built in
+        flight_time = calculate_flight_time(base_distance, is_round_trip)
         flight_time_str = MainWindow.format_stored_time(flight_time)
 
         # Transport Mode Comparison table
@@ -724,8 +731,6 @@ class MainWindow(tk.Tk):
         # Add dashboard button at the bottom
 
         self.result_text.insert(tk.END, "\n\n")
-
-        self.result_text.insert(tk.END, "📊 View Interactive Dashboard", "dashboard_link")
 
         # Configure tag for dashboard link
 
