@@ -16,9 +16,13 @@ class RouteViewer:
         self.db_path = os.path.join(self.project_root, "data", "routes.db")
 
     def format_time(self, seconds):
-        """Convert seconds to hours and minutes format"""
+        """Convert seconds to hours and minutes format with minimums"""
         if pd.isna(seconds):
             return "N/A"
+
+        # Enforce minimum times
+        if seconds < 1800:  # If less than 30 minutes
+            seconds = 1800  # Set to 30 minutes minimum for driving
 
         hours = int(seconds) // 3600
         minutes = (int(seconds) % 3600) // 60

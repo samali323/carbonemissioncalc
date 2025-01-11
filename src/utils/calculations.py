@@ -192,3 +192,4 @@ def calculate_equivalencies(emissions_mtco2: float) -> Dict[str, float]:
         'smartphones_charged': emissions_mtco2 * 80847  # Number of smartphones charged
     }
 
+
