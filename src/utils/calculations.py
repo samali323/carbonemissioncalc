@@ -1,16 +1,11 @@
 import math
-from typing import Dict, Optional
-
-import self
+from typing import Dict
 
 from src.config.constants import (
-    KM_PER_MILE,
     TRANSPORT_MODES,
-    EMISSION_FACTORS,
-    AIRCRAFT_EMISSION_FACTORS, DEFAULT_CARBON_PRICE, EU_ETS_PRICE, CARBON_PRICES_EUR, EUR_TO_GBP
+    DEFAULT_CARBON_PRICE, EU_ETS_PRICE, CARBON_PRICES_EUR, EUR_TO_GBP
 )
 from src.data.team_data import get_airport_coordinates, get_team_airport, TEAM_COUNTRIES
-
 from src.models.icao_calculator import ICAOEmissionsCalculator
 
 
@@ -234,25 +229,143 @@ def calculate_transit_time(distance_km: float) -> int:
     return max(calculated_time, MINIMUM_TRANSIT_TIME)
 
 
-def calculate_flight_time(distance_km: float, is_round_trip: bool = False) -> int:
+def calculate_flight_time(mode: str, distance_km: float, is_round_trip: bool = False) -> str:
 
-    """Calculate flight time in seconds based on distance."""
+    """Calculate journey time based on distance in kilometers"""
 
-    CRUISE_SPEED = 800  # km/h
+    TRANSPORT_MODES = {
 
-    OVERHEAD_TIME = 30 * 60  # 30 minutes in seconds for takeoff/landing
+        'air': {
+
+            'cruise_speed': 800,  # km/h at cruise altitude
+
+            'taxi_time': 0.5,  # hours
+
+            'boarding_time': 0,  # hours for security, boarding, etc.
+
+            'minimum_time': 0.5,  # minimum journey time
+
+            'climb_distance': 150,  # km spent climbing/descending
+
+            'climb_speed': 550,  # km/h during climb/descent
+
+        }
+
+    }
 
 
-    # Calculate base flight time
+    def calculate_single_leg(mode_params, distance):
 
-    cruise_time = (distance_km / CRUISE_SPEED) * 3600  # Convert to seconds
+        cruise_distance = max(0, distance - (mode_params['climb_distance'] * 2))
 
-    total_time = cruise_time + OVERHEAD_TIME
+        cruise_time = cruise_distance / mode_params['cruise_speed']
 
+        climb_time = (min(distance, mode_params['climb_distance'] * 2)) / mode_params['climb_speed']
+
+
+        # Short flights have proportionally more taxi and boarding time
+
+        if distance < 500:  # Changed from 300 miles to 500 km
+
+            boarding_factor = 0.75
+
+            taxi_factor = 0.75
+
+        else:
+
+            boarding_factor = 1.0
+
+            taxi_factor = 1.0
+
+
+        total_time = (cruise_time + climb_time +
+
+                     mode_params['taxi_time'] * taxi_factor +
+
+                     mode_params['boarding_time'] * boarding_factor)
+
+
+        return max(total_time, mode_params['minimum_time'])
+
+
+    if mode not in TRANSPORT_MODES:
+
+        raise ValueError(f"Unsupported transport mode: {mode}")
+
+
+    journey_time = calculate_single_leg(TRANSPORT_MODES[mode], distance_km)
 
     if is_round_trip:
 
-        total_time *= 2  # Simply double the total time for round trips
+        journey_time *= 2
 
 
-    return int(total_time)
+    hours = int(journey_time)
+
+    minutes = int((journey_time % 1) * 60)
+
+
+    return f"{hours}h {minutes}m"
+
+
+def format_time_diff(hours_diff):
+
+    """Format time difference in hours and minutes"""
+
+    total_minutes = int(abs(hours_diff) * 60)
+
+    hours = total_minutes // 60
+
+    minutes = total_minutes % 60
+
+
+    if hours == 0:
+
+        time_str = f"{minutes}m"
+
+    else:
+
+        time_str = f"{hours}h {minutes}m"
+
+    return time_str
+
+
+def parse_time(time_str):
+
+    """Parse time string in format 'Xh Ym' to hours"""
+
+    parts = time_str.split('h')
+
+    if len(parts) != 2:
+
+        return 0
+
+    hours = int(parts[0]) if parts[0] else 0
+
+    minutes = int(parts[1].strip('m')) if parts[1].strip('m') else 0
+
+    return hours + (minutes / 60)
+
+
+def extract_hours(time_str):
+
+    """Extract hours from time string in format 'Xh Ym'"""
+
+    try:
+
+        parts = time_str.split('h')
+
+        hours = float(parts[0])
+
+        minutes = float(parts[1].strip('m')) / 60
+
+        return hours + minutes
+
+    except (IndexError, ValueError):
+
+        return 0
+
+
+# Example usage:
+
+# flight_hours = extract_hours(calculate_flight_time('air', 1000))
