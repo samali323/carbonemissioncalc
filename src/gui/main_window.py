@@ -265,13 +265,10 @@ class MainWindow(tk.Tk):
             try:
 
                 self.calculate()  # Calculate emissions
-
-                if hasattr(self, 'latest_result'):
-                    self.dashboard_connector.open_dashboard_browser()
-
             except Exception as e:
 
                 messagebox.showerror("Error", str(e))
+
     def on_round_trip_toggle(self):
         """Recalculate emissions when round trip toggle changes"""
         try:
@@ -533,7 +530,7 @@ class MainWindow(tk.Tk):
             self.result_text.insert(tk.END, row)
 
 
-        self.result_text.insert(tk.END, "=" * 70 + "\n")
+        self.result_text.insert(tk.END, "=" * 90 + "\n")
 
         # Carbon Price Analysis with vertical lines
         self.result_text.insert(tk.END, f"\nCarbon Price Analysis ({away_country}):\n")

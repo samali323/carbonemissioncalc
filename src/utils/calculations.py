@@ -193,17 +193,6 @@ def calculate_equivalencies(emissions_mtco2: float) -> Dict[str, float]:
     }
 
 
-def calculate_flight_time(distance_km: float) -> int:
-    """Calculate flight time in seconds based on distance."""
-    MINIMUM_FLIGHT_TIME = 30 * 60  # 30 minutes in seconds for takeoff/landing
-    CRUISE_SPEED = 800  # km/h
-
-    # Calculate flight time: minimum time + cruise time
-    cruise_time = (distance_km / CRUISE_SPEED) * 3600  # Convert to seconds
-    total_time = MINIMUM_FLIGHT_TIME + cruise_time
-
-    return int(total_time)
-
 def calculate_driving_time(distance_km: float) -> int:
     """Calculate driving time in seconds based on distance with 30 minute minimum."""
     MINIMUM_DRIVING_TIME = 30 * 60  # 30 minutes in seconds
@@ -246,26 +235,24 @@ def calculate_transit_time(distance_km: float) -> int:
 
 
 def calculate_flight_time(distance_km: float, is_round_trip: bool = False) -> int:
-    """Calculate flight time in seconds based on distance.
-    Uses dynamic overhead times based on flight distance."""
+
+    """Calculate flight time in seconds based on distance."""
+
     CRUISE_SPEED = 800  # km/h
 
-    # Dynamic overhead times based on distance
-    if distance_km < 500:  # Short domestic flights
-        OVERHEAD_TIME = 15 * 60  # 15 minutes total overhead for takeoff/landing
-    elif distance_km < 1500:  # Medium flights
-        OVERHEAD_TIME = 20 * 60  # 20 minutes overhead
-    else:  # Long international flights
-        OVERHEAD_TIME = 30 * 60  # 30 minutes overhead
+    OVERHEAD_TIME = 30 * 60  # 30 minutes in seconds for takeoff/landing
 
-    # Calculate cruise time
+
+    # Calculate base flight time
+
     cruise_time = (distance_km / CRUISE_SPEED) * 3600  # Convert to seconds
 
+    total_time = cruise_time + OVERHEAD_TIME
+
+
     if is_round_trip:
-        # Round trip: double both cruise time and overhead
-        total_time = (cruise_time * 2) + (OVERHEAD_TIME * 2)
-    else:
-        # One way: single cruise time and overhead
-        total_time = cruise_time + OVERHEAD_TIME
+
+        total_time *= 2  # Simply double the total time for round trips
+
 
     return int(total_time)
