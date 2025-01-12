@@ -289,27 +289,25 @@ class DashboardApp:
                     ], className='impact-category')
                 ])
 
-                # Transport Mode Comparison - Modified to include distance and time
+                # Transport Mode Comparison
                 transport_headers = ['Mode', 'Est. Travel Time', 'Distance (km)', 'CO2 (t)', 'CO2 Saved (t)']
-
                 transport_data = [
                     ['Air',
                      format_time_duration(data['transport_comparison']['air']['time']),
-                     f"{data['distance_km']:.1f}",
+                     f"{data['transport_comparison']['air']['distance']:.1f}",
                      f"{data['transport_comparison']['air']['emissions']:.2f}",
                      ''],
                     ['Rail',
                      format_time_duration(data['transport_comparison']['rail']['time']),
-                     f"{data['distance_km']:.1f}",
+                     f"{data['transport_comparison']['rail']['distance']:.1f}",
                      f"{data['transport_comparison']['rail']['emissions']:.2f}",
                      f"{data['transport_comparison']['air']['emissions'] - data['transport_comparison']['rail']['emissions']:.2f}"],
                     ['Bus',
                      format_time_duration(data['transport_comparison']['bus']['time']),
-                     f"{data['distance_km']:.1f}",
+                     f"{data['transport_comparison']['bus']['distance']:.1f}",
                      f"{data['transport_comparison']['bus']['emissions']:.2f}",
                      f"{data['transport_comparison']['air']['emissions'] - data['transport_comparison']['bus']['emissions']:.2f}"]
                 ]
-
                 transport_comparison = self.create_table(transport_headers, transport_data)
 
                 carbon_price = html.Div([

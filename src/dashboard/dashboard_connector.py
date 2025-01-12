@@ -90,28 +90,64 @@ class DashboardConnector:
                 time.sleep(2)  # Wait for server to start
                 webbrowser.open('http://127.0.0.1:8050')
 
-
-
     def update_dashboard_data(self, main_window):
         """Update dashboard data from main window"""
         try:
             if hasattr(main_window, 'latest_result'):
                 # Get base values
-                distance_km = main_window.latest_result.distance_km
-                is_round_trip = main_window.latest_result.is_round_trip
+                home_team = main_window.home_team_entry.get()
+                away_team = main_window.away_team_entry.get()
+                is_round_trip = main_window.round_trip_var.get()
                 passengers = int(main_window.passengers_entry.get())
+                distance_km = main_window.latest_result.distance_km
 
                 # Calculate flight time
-                from src.utils.calculations import calculate_flight_time, calculate_transit_time, calculate_driving_time
-
                 flight_time = calculate_flight_time(distance_km, is_round_trip)
-                transit_time = calculate_transit_time(distance_km)
-                driving_time = calculate_driving_time(distance_km)
 
-                # Calculate emissions
+                # Get route information from database
+                try:
+                    conn = sqlite3.connect(main_window.db_path)
+                    cursor = conn.cursor()
+
+                    cursor.execute("""
+                        SELECT driving_duration, transit_duration, driving_distance, transit_distance
+                        FROM routes 
+                        WHERE home_team = ? AND away_team = ?
+                    """, (home_team, away_team))
+
+                    row = cursor.fetchone()
+                    conn.close()
+
+                    if row:
+                        driving_duration, transit_duration, driving_distance, transit_distance = row
+
+                        # Double values if round trip
+                        if is_round_trip:
+                            driving_duration = driving_duration * 2 if driving_duration else None
+                            transit_duration = transit_duration * 2 if transit_duration else None
+                            driving_distance = driving_distance * 2 if driving_distance else 0
+                            transit_distance = transit_distance * 2 if transit_distance else 0
+
+                        # Convert stored distances from meters to kilometers
+                        driving_km = driving_distance / 1000 if driving_distance else distance_km
+                        transit_km = transit_distance / 1000 if transit_distance else distance_km
+                    else:
+                        driving_duration = calculate_driving_time(distance_km)
+                        transit_duration = calculate_transit_time(distance_km)
+                        driving_km = distance_km
+                        transit_km = distance_km
+
+                except Exception as e:
+                    print(f"Database error: {str(e)}")
+                    driving_duration = calculate_driving_time(distance_km)
+                    transit_duration = calculate_transit_time(distance_km)
+                    driving_km = distance_km
+                    transit_km = distance_km
+
+                # Calculate emissions for each mode
                 air_emissions = float(main_window.latest_result.total_emissions)
-                rail_emissions = float(calculate_transport_emissions('rail', distance_km, passengers, is_round_trip))
-                bus_emissions = float(calculate_transport_emissions('bus', distance_km, passengers, is_round_trip))
+                rail_emissions = float(calculate_transport_emissions('rail', transit_km, passengers, is_round_trip))
+                bus_emissions = float(calculate_transport_emissions('bus', driving_km, passengers, is_round_trip))
 
                 dashboard_data = {
                     'total_emissions': float(main_window.latest_result.total_emissions),
@@ -119,20 +155,23 @@ class DashboardConnector:
                     'distance_km': float(distance_km),
                     'flight_type': main_window.latest_result.flight_type,
                     'is_round_trip': is_round_trip,
-                    'home_team': main_window.home_team_entry.get(),
-                    'away_team': main_window.away_team_entry.get(),
+                    'home_team': home_team,
+                    'away_team': away_team,
                     'transport_comparison': {
                         'air': {
                             'emissions': air_emissions,
-                            'time': flight_time
+                            'time': flight_time,
+                            'distance': distance_km
                         },
                         'rail': {
                             'emissions': rail_emissions,
-                            'time': transit_time
+                            'time': transit_duration,
+                            'distance': transit_km
                         },
                         'bus': {
                             'emissions': bus_emissions,
-                            'time': driving_time
+                            'time': driving_duration,
+                            'distance': driving_km
                         }
                     },
                     'environmental_impact': calculate_equivalencies(main_window.latest_result.total_emissions)
@@ -143,7 +182,7 @@ class DashboardConnector:
                     json.dump(dashboard_data, f)
 
         except Exception as e:
-            print(f"Error updating dashboard data: {str(e)}")
+            print(f"Error updating dashboard: {str(e)}")
     def update_status(self):
         """Update dashboard status label"""
         try:
@@ -151,14 +190,14 @@ class DashboardConnector:
             if response.status_code == 200:
                 if self.status_label:
                     self.status_label.config(
-                        text="Dashboard Status: Running ✓",
+                        text="Dashboard Status: Running â",
                         foreground="green"
                     )
                 self.server_running = True
         except:
             if self.status_label:
                 self.status_label.config(
-                    text="Dashboard Status: Not Connected ✗",
+                    text="Dashboard Status: Not Connected â",
                     foreground="red"
                 )
             self.server_running = False
