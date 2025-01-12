@@ -1,4 +1,5 @@
-
+flask>=2.0.0
+flask-cors>=4.0.0
 
 # Data Processing
 pandas>=2.2.0
@@ -13,5 +14,3 @@ dash>=2.0.0
 
 # Data Sources
 airportsdata>=1.0.0
-
-
