@@ -119,9 +119,6 @@ class DashboardConnector:
                 with open(self.data_file, 'w') as f:
                     json.dump(dashboard_data, f)
 
-                # Open browser if not already opened
-                if not self.browser_opened:
-                    self.open_dashboard_browser()
 
         except Exception as e:
             print(f"Error updating dashboard data: {str(e)}")

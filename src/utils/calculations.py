@@ -229,143 +229,47 @@ def calculate_transit_time(distance_km: float) -> int:
     return max(calculated_time, MINIMUM_TRANSIT_TIME)
 
 
-def calculate_flight_time(mode: str, distance_km: float, is_round_trip: bool = False) -> str:
-
-    """Calculate journey time based on distance in kilometers"""
-
-    TRANSPORT_MODES = {
-
-        'air': {
-
-            'cruise_speed': 800,  # km/h at cruise altitude
-
-            'taxi_time': 0.5,  # hours
-
-            'boarding_time': 0,  # hours for security, boarding, etc.
-
-            'minimum_time': 0.5,  # minimum journey time
-
-            'climb_distance': 150,  # km spent climbing/descending
-
-            'climb_speed': 550,  # km/h during climb/descent
-
-        }
-
-    }
-
-
-    def calculate_single_leg(mode_params, distance):
-
-        cruise_distance = max(0, distance - (mode_params['climb_distance'] * 2))
-
-        cruise_time = cruise_distance / mode_params['cruise_speed']
-
-        climb_time = (min(distance, mode_params['climb_distance'] * 2)) / mode_params['climb_speed']
-
-
-        # Short flights have proportionally more taxi and boarding time
-
-        if distance < 500:  # Changed from 300 miles to 500 km
-
-            boarding_factor = 0.75
-
-            taxi_factor = 0.75
-
-        else:
-
-            boarding_factor = 1.0
-
-            taxi_factor = 1.0
-
-
-        total_time = (cruise_time + climb_time +
-
-                     mode_params['taxi_time'] * taxi_factor +
-
-                     mode_params['boarding_time'] * boarding_factor)
-
-
-        return max(total_time, mode_params['minimum_time'])
-
-
-    if mode not in TRANSPORT_MODES:
-
-        raise ValueError(f"Unsupported transport mode: {mode}")
-
-
-    journey_time = calculate_single_leg(TRANSPORT_MODES[mode], distance_km)
-
-    if is_round_trip:
-
-        journey_time *= 2
-
-
-    hours = int(journey_time)
-
-    minutes = int((journey_time % 1) * 60)
-
-
-    return f"{hours}h {minutes}m"
-
-
-def format_time_diff(hours_diff):
-
-    """Format time difference in hours and minutes"""
-
-    total_minutes = int(abs(hours_diff) * 60)
-
-    hours = total_minutes // 60
-
-    minutes = total_minutes % 60
-
+def format_time_duration(seconds: int) -> str:
+    """
+    Format seconds into hours and minutes string.
+    Always shows minutes, only shows hours if > 0
+    """
+    hours = seconds // 3600
+    minutes = (seconds % 3600) // 60
 
     if hours == 0:
-
-        time_str = f"{minutes}m"
-
+        return f"{minutes} minutes"
     else:
+        return f"{hours} hours {minutes} minutes"
 
-        time_str = f"{hours}h {minutes}m"
+def calculate_flight_time(distance_km: float, is_round_trip: bool = False) -> int:
+    """
+    Calculate flight time in seconds based on distance.
+    Includes taxi time, takeoff, landing, and cruise portions.
 
-    return time_str
+    Args:
+        distance_km: Distance in kilometers for one leg
+        is_round_trip: Whether this is a round trip flight
 
+    Returns:
+        Total time in seconds
+    """
+    # Constants for one leg of the journey
+    CRUISE_SPEED = 800      # km/h
+    GROUND_OPS = 1800      # 30 minutes total for taxi, takeoff, landing per leg
+    MIN_TIME = 1800        # Minimum 30 minutes for very short flights
 
-def parse_time(time_str):
+    # Calculate cruise time
+    cruise_time = (distance_km / CRUISE_SPEED) * 3600  # Convert to seconds
 
-    """Parse time string in format 'Xh Ym' to hours"""
+    # Total time for one leg
+    one_leg_time = cruise_time + GROUND_OPS
 
-    parts = time_str.split('h')
+    # Ensure minimum time
+    one_leg_time = max(one_leg_time, MIN_TIME)
 
-    if len(parts) != 2:
-
-        return 0
-
-    hours = int(parts[0]) if parts[0] else 0
-
-    minutes = int(parts[1].strip('m')) if parts[1].strip('m') else 0
-
-    return hours + (minutes / 60)
-
-
-def extract_hours(time_str):
-
-    """Extract hours from time string in format 'Xh Ym'"""
-
-    try:
-
-        parts = time_str.split('h')
-
-        hours = float(parts[0])
-
-        minutes = float(parts[1].strip('m')) / 60
-
-        return hours + minutes
-
-    except (IndexError, ValueError):
-
-        return 0
-
-
-# Example usage:
-
-# flight_hours = extract_hours(calculate_flight_time('air', 1000))
+    # Double for round trip
+    if is_round_trip:
+        return int(one_leg_time * 1.50)
+    else:
+        return int(one_leg_time)

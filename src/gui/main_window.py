@@ -4,7 +4,6 @@ from __future__ import annotations
 import json
 import os
 import tkinter as tk
-from dbm import sqlite3
 from tkinter import ttk, messagebox, filedialog
 import sqlite3
 import pandas as pd
@@ -20,7 +19,7 @@ from src.gui.theme import COLORS
 from src.gui.widgets.auto_complete import TeamAutoComplete, CompetitionAutoComplete
 from src.models.emissions import EmissionsCalculator, EmissionsResult
 from src.utils.calculations import (
-    calculate_transport_emissions, calculate_equivalencies, calculate_distance, determine_mileage_type, calculate_flight_time
+    calculate_transport_emissions, calculate_equivalencies, calculate_distance, determine_mileage_type, calculate_flight_time, format_time_duration
 )
 
 
@@ -485,8 +484,8 @@ class MainWindow(tk.Tk):
                                                    is_round_trip)
 
         # Calculate flight time with round trip handling built in
-        flight_time = calculate_flight_time(base_distance, is_round_trip)
-        flight_time_str = MainWindow.format_stored_time(flight_time)
+        flight_time_seconds = calculate_flight_time(base_distance, is_round_trip)
+        flight_time_str = format_time_duration(flight_time_seconds)
 
         # Transport Mode Comparison table
         self.result_text.insert(tk.END, "\nTransport Mode Comparison:\n")
