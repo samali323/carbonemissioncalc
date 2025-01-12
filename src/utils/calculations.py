@@ -35,21 +35,7 @@ def determine_mileage_type(distance_km: float) -> str:
         return "Long"
 
 
-def calculate_transport_emissions(
-
-        mode: str,
-
-        distance_km: float,
-
-        passengers: int = 30,
-
-        is_round_trip: bool = False,
-
-        home_team: str = None,
-
-        away_team: str = None
-
-) -> float:
+def calculate_transport_emissions(mode: str, distance_km: float, passengers: int = 30, is_round_trip: bool = False, home_team: str = None, away_team: str = None) -> float:
     """Calculate emissions for different transport modes."""
 
     if distance_km == 0:

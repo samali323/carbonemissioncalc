@@ -1,3 +1,5 @@
+import sqlite3
+
 from src.dashboard.app import DashboardApp
 from tkinter import ttk
 import webbrowser
@@ -8,7 +10,8 @@ import threading
 import time
 import requests
 
-from src.utils.calculations import calculate_transport_emissions, calculate_equivalencies
+from src.utils.calculations import calculate_transport_emissions, calculate_equivalencies, format_time_duration, \
+    get_carbon_price, calculate_driving_time, calculate_transit_time, calculate_flight_time
 
 import threading
 import webbrowser
@@ -87,30 +90,50 @@ class DashboardConnector:
                 time.sleep(2)  # Wait for server to start
                 webbrowser.open('http://127.0.0.1:8050')
 
+
+
     def update_dashboard_data(self, main_window):
         """Update dashboard data from main window"""
         try:
             if hasattr(main_window, 'latest_result'):
-                from src.utils.calculations import calculate_transport_emissions, calculate_equivalencies
+                # Get base values
+                distance_km = main_window.latest_result.distance_km
+                is_round_trip = main_window.latest_result.is_round_trip
+                passengers = int(main_window.passengers_entry.get())
+
+                # Calculate flight time
+                from src.utils.calculations import calculate_flight_time, calculate_transit_time, calculate_driving_time
+
+                flight_time = calculate_flight_time(distance_km, is_round_trip)
+                transit_time = calculate_transit_time(distance_km)
+                driving_time = calculate_driving_time(distance_km)
+
+                # Calculate emissions
+                air_emissions = float(main_window.latest_result.total_emissions)
+                rail_emissions = float(calculate_transport_emissions('rail', distance_km, passengers, is_round_trip))
+                bus_emissions = float(calculate_transport_emissions('bus', distance_km, passengers, is_round_trip))
 
                 dashboard_data = {
-                    'total_emissions': main_window.latest_result.total_emissions,
-                    'per_passenger': main_window.latest_result.per_passenger,
-                    'distance_km': main_window.latest_result.distance_km,
+                    'total_emissions': float(main_window.latest_result.total_emissions),
+                    'per_passenger': float(main_window.latest_result.per_passenger),
+                    'distance_km': float(distance_km),
                     'flight_type': main_window.latest_result.flight_type,
-                    'is_round_trip': main_window.latest_result.is_round_trip,
+                    'is_round_trip': is_round_trip,
                     'home_team': main_window.home_team_entry.get(),
                     'away_team': main_window.away_team_entry.get(),
                     'transport_comparison': {
-                        'air': main_window.latest_result.total_emissions,
-                        'rail': calculate_transport_emissions('rail',
-                                                              main_window.latest_result.distance_km,
-                                                              int(main_window.passengers_entry.get()),
-                                                              main_window.latest_result.is_round_trip),
-                        'bus': calculate_transport_emissions('bus',
-                                                             main_window.latest_result.distance_km,
-                                                             int(main_window.passengers_entry.get()),
-                                                             main_window.latest_result.is_round_trip)
+                        'air': {
+                            'emissions': air_emissions,
+                            'time': flight_time
+                        },
+                        'rail': {
+                            'emissions': rail_emissions,
+                            'time': transit_time
+                        },
+                        'bus': {
+                            'emissions': bus_emissions,
+                            'time': driving_time
+                        }
                     },
                     'environmental_impact': calculate_equivalencies(main_window.latest_result.total_emissions)
                 }
@@ -119,10 +142,8 @@ class DashboardConnector:
                 with open(self.data_file, 'w') as f:
                     json.dump(dashboard_data, f)
 
-
         except Exception as e:
             print(f"Error updating dashboard data: {str(e)}")
-
     def update_status(self):
         """Update dashboard status label"""
         try:

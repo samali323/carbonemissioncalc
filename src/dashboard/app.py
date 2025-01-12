@@ -5,6 +5,8 @@ import json
 import tempfile
 import os
 
+from src.utils.calculations import format_time_duration
+
 
 class DashboardApp:
     def __init__(self):
@@ -287,44 +289,73 @@ class DashboardApp:
                     ], className='impact-category')
                 ])
 
-                # Transport Mode Comparison
-                transport_headers = ['Mode', 'Distance (km)', 'CO2 (t)', 'CO2 Saved (t)']
+                # Transport Mode Comparison - Modified to include distance and time
+                transport_headers = ['Mode', 'Est. Travel Time', 'Distance (km)', 'CO2 (t)', 'CO2 Saved (t)']
+
                 transport_data = [
-                    ['Air', f"{data['distance_km']:.1f}",
-                     f"{data['transport_comparison']['air']:.2f}", ''],
-                    ['Rail', f"{data['distance_km'] * 1.2:.1f}",
-                     f"{data['transport_comparison']['rail']:.2f}",
-                     f"{data['transport_comparison']['air'] - data['transport_comparison']['rail']:.2f}"],
-                    ['Bus', f"{data['distance_km'] * 1.3:.1f}",
-                     f"{data['transport_comparison']['bus']:.2f}",
-                     f"{data['transport_comparison']['air'] - data['transport_comparison']['bus']:.2f}"]
+                    ['Air',
+                     format_time_duration(data['transport_comparison']['air']['time']),
+                     f"{data['distance_km']:.1f}",
+                     f"{data['transport_comparison']['air']['emissions']:.2f}",
+                     ''],
+                    ['Rail',
+                     format_time_duration(data['transport_comparison']['rail']['time']),
+                     f"{data['distance_km']:.1f}",
+                     f"{data['transport_comparison']['rail']['emissions']:.2f}",
+                     f"{data['transport_comparison']['air']['emissions'] - data['transport_comparison']['rail']['emissions']:.2f}"],
+                    ['Bus',
+                     format_time_duration(data['transport_comparison']['bus']['time']),
+                     f"{data['distance_km']:.1f}",
+                     f"{data['transport_comparison']['bus']['emissions']:.2f}",
+                     f"{data['transport_comparison']['air']['emissions'] - data['transport_comparison']['bus']['emissions']:.2f}"]
                 ]
+
                 transport_comparison = self.create_table(transport_headers, transport_data)
 
-                # Carbon Price Analysis
                 carbon_price = html.Div([
+
                     html.P(f"Carbon Price: €45.00/tCO2"),
+
                     self.create_table(
+
                         ['Mode', 'Cost'],
-                        [['Air', f"€ {data['transport_comparison']['air'] * 45:.2f}"],
-                         ['Rail', f"€ {data['transport_comparison']['rail'] * 45:.2f}"],
-                         ['Bus', f"€ {data['transport_comparison']['bus'] * 45:.2f}"]]
+
+                        [['Air', f"€ {data['transport_comparison']['air']['emissions'] * 45:.2f}"],
+
+                         ['Rail', f"€ {data['transport_comparison']['rail']['emissions'] * 45:.2f}"],
+
+                         ['Bus', f"€ {data['transport_comparison']['bus']['emissions'] * 45:.2f}"]]
+
                     )
+
                 ])
 
                 # Social Cost Analysis
+
                 social_cost_headers = ['Mode', 'Cost Type', 'Low', 'Median', 'Mean', 'High']
+
                 social_cost_data = []
+
                 for mode in ['Air', 'Rail', 'Bus']:
-                    emissions = data['transport_comparison'][mode.lower()]
+
+                    emissions = data['transport_comparison'][mode.lower()]['emissions']
+
                     social_cost_data.extend([
+
                         [mode, 'Synthetic',
+
                          f"€ {emissions * 97:.0f}",
+
                          f"€ {emissions * 185:.0f}",
+
                          f"€ {emissions * 283:.0f}",
+
                          f"€ {emissions * 369:.0f}"],
+
                         ['', 'EPA', '', f"€ {emissions * 157:.0f}", '', ''],
+
                         ['', 'IWG', '', f"€ {emissions * 52:.0f}", '', '']
+
                     ])
                 social_cost = self.create_table(social_cost_headers, social_cost_data)
 
