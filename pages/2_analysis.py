@@ -12,15 +12,68 @@ st.set_page_config(
     layout="wide"
 )
 
+# Enhanced CSS styling
+st.markdown("""
+    <style>
+    .main {
+        padding: 2rem;
+    }
+    .match-card {
+        background: linear-gradient(135deg, #f0f2f6 0%, #e6e9ef 100%);
+        border-radius: 15px;
+        padding: 20px;
+        margin: 15px 0;
+        border: 1px solid #e0e0e0;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .match-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
+    }
+    .match-header {
+        background: linear-gradient(135deg, #262730 0%, #1a1c23 100%);
+        color: white;
+        padding: 20px;
+        border-radius: 15px;
+        margin-bottom: 25px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    .vs-text {
+        color: #ff4b4b;
+        font-weight: bold;
+        font-size: 24px;
+        text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
+    }
+    .competition-tag {
+        background: linear-gradient(135deg, #ff4b4b 0%, #ff6b6b 100%);
+        color: white;
+        padding: 8px 15px;
+        border-radius: 20px;
+        font-size: 14px;
+        font-weight: bold;
+        box-shadow: 0 2px 4px rgba(255, 75, 75, 0.2);
+    }
+    .stButton button {
+        border-radius: 20px;
+        padding: 10px 20px;
+        font-weight: bold;
+        transition: all 0.3s ease;
+    }
+    .stButton button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 def format_time(hours):
     """Convert hours to HH:MM format"""
     if pd.isna(hours):
         return "N/A"
-
     total_minutes = int(hours * 60)
     h = total_minutes // 60
     m = total_minutes % 60
-
     if h == 0:
         return f"{m}m"
     return f"{h}h {m}m"
@@ -29,8 +82,6 @@ def load_data():
     """Load data from database"""
     try:
         conn = sqlite3.connect('data/routes.db')
-
-        # Load match emissions data with route information
         query = """
         SELECT 
             r.home_team as "Home Team",
@@ -42,16 +93,11 @@ def load_data():
             r.transit_distance/1000.0 as transit_km
         FROM routes r
         """
-
         df = pd.read_sql_query(query, conn)
         conn.close()
-
-        # Format time columns
         df['Driving Time'] = df['driving_hours'].apply(format_time)
         df['Transit Time'] = df['transit_hours'].apply(format_time)
-
         return df
-
     except Exception as e:
         st.error(f"Error loading data: {str(e)}")
         return None
@@ -68,7 +114,6 @@ def calculate_competition_summary(df):
         total_emissions = 0
 
         for _, row in comp_df.iterrows():
-            # Get airports and coordinates
             home_airport = get_team_airport(row['Home Team'])
             away_airport = get_team_airport(row['Away Team'])
 
@@ -83,7 +128,6 @@ def calculate_competition_summary(df):
                     )
                     total_distance += distance
 
-                    # Calculate emissions
                     result = calculator.calculate_flight_emissions(
                         origin_lat=home_coords['lat'],
                         origin_lon=home_coords['lon'],
@@ -106,7 +150,6 @@ def calculate_competition_summary(df):
 
     return pd.DataFrame(summary_data)
 
-# Main app
 def main():
     st.title('⚽ Football Travel Emissions Analysis')
 
@@ -115,44 +158,60 @@ def main():
     if df is None:
         return
 
-    # Competition Summary
-    st.markdown("### 🏆 Competition Summary")
-    summary_df = calculate_competition_summary(df)
+    # Competition Summary with enhanced styling
+    st.markdown("""
+        <div class='match-header'>
+            <h3>🏆 Competition Summary</h3>
+        </div>
+    """, unsafe_allow_html=True)
 
-    # Format and display summary
+    summary_df = calculate_competition_summary(df)
     display_summary = summary_df.round(2).sort_values('Total Emissions (tons)', ascending=False)
+
+    # Display summary in a styled container
+    st.markdown("<div class='summary-card'>", unsafe_allow_html=True)
     st.dataframe(
         display_summary,
         hide_index=True,
         use_container_width=True
     )
+    st.markdown("</div>", unsafe_allow_html=True)
 
-    # Match Selection
-    st.markdown("### 🔍 Match Selection")
-    col1, col2, col3 = st.columns(3)
+    # Match Selection with styled filters
+    st.markdown("""
+        <div class='match-header'>
+            <h3>🔍 Match Selection</h3>
+        </div>
+    """, unsafe_allow_html=True)
 
-    with col1:
-        competition_filter = st.selectbox(
-            "Competition",
-            ["All"] + sorted(df['Competition'].unique().tolist())
-        )
+    # Filters in styled container
+    with st.container():
+        st.markdown("<div class='filter-container'>", unsafe_allow_html=True)
+        col1, col2, col3 = st.columns(3)
 
-    with col2:
-        filtered_df = df if competition_filter == "All" else df[df['Competition'] == competition_filter]
-        home_filter = st.selectbox(
-            "Home Team",
-            ["All"] + sorted(filtered_df['Home Team'].unique().tolist())
-        )
+        with col1:
+            competition_filter = st.selectbox(
+                "🏆 Select Competition",
+                ["All"] + sorted(df['Competition'].unique().tolist())
+            )
 
-    with col3:
-        if home_filter != "All":
-            away_teams = df[df['Home Team'] == home_filter]['Away Team'].unique()
-        else:
-            away_teams = filtered_df['Away Team'].unique()
-        away_filter = st.selectbox(
-            "Away Team",
-            ["All"] + sorted(away_teams)
-        )
+        with col2:
+            filtered_df = df if competition_filter == "All" else df[df['Competition'] == competition_filter]
+            home_filter = st.selectbox(
+                "🏠 Select Home Team",
+                ["All"] + sorted(filtered_df['Home Team'].unique().tolist())
+            )
+
+        with col3:
+            if home_filter != "All":
+                away_teams = df[df['Home Team'] == home_filter]['Away Team'].unique()
+            else:
+                away_teams = filtered_df['Away Team'].unique()
+            away_filter = st.selectbox(
+                "✈️ Select Away Team",
+                ["All"] + sorted(away_teams)
+            )
+        st.markdown("</div>", unsafe_allow_html=True)
 
     # Apply filters
     filtered_df = df.copy()
@@ -163,54 +222,34 @@ def main():
     if away_filter != "All":
         filtered_df = filtered_df[filtered_df['Away Team'] == away_filter]
 
-    # Match Details section
-    st.markdown("### 📊 Match Details")
+    # Display matches in cards
+    for index, row in filtered_df.iterrows():
+        st.markdown(f"""
+            <div class='match-card'>
+                <div style='display: flex; justify-content: space-between; align-items: center;'>
+                    <div style='flex: 2;color: black;text-align: center;'>{row['Home Team']}</div>
+                    <div style='flex: 1; text-align: center;'>
+                        <span class='vs-text'>VS</span>
+                    </div>
+                    <div style='flex: 2; color: black; text-align: center;'>{row['Away Team']}</div>
+                    <div style='flex: 1; text-align: right;'>
+                        <span class='competition-tag'>{row['Competition']}</span>
+                    </div>
+                </div>
+                <div style='margin-top: 15px; display: flex; justify-content: space-between; color: #666;'>
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
 
-    # Select columns to display
-    display_cols = [
-        'Home Team', 'Away Team', 'Competition',
-        'Driving Time', 'Transit Time',
-        'driving_km', 'transit_km'
-    ]
+        if st.button("Calculate Emissions", key=f"calc_{index}"):
+            st.session_state.calculator_input = {
+                'home_team': row['Home Team'],
+                'away_team': row['Away Team'],
+                'passengers': 30,
+                'is_round_trip': False,
+                'from_analysis': True
+            }
+            st.switch_page("app.py")
 
-    # Display the dataframe
-    st.dataframe(
-        filtered_df[display_cols].rename(columns={
-            'driving_km': 'Driving Distance (km)',
-            'transit_km': 'Transit Distance (km)'
-        }),
-        hide_index=True,
-        use_container_width=True
-    )
-
-    # Match selection
-    st.markdown("### Select a match to load:")
-    selected_index = st.radio(
-        "",  # Empty label since we have the header above
-        options=[(row['Home Team'], row['Away Team'], row['Competition'])
-                 for _, row in filtered_df.iterrows()],
-        format_func=lambda x: f"{x[0]} vs {x[1]} ({x[2]})",
-        key="match_selector"
-    )
-
-    # Handle match selection
-    if st.button("Load Selected Match in Calculator"):
-        # Find the selected match in the dataframe
-        selected_match = filtered_df[
-            (filtered_df['Home Team'] == selected_index[0]) &
-            (filtered_df['Away Team'] == selected_index[1])
-            ].iloc[0]
-
-        # Store in session state
-        st.session_state.calculator_input = {
-            'home_team': selected_match['Home Team'],
-            'away_team': selected_match['Away Team'],
-            'passengers': 30,
-            'is_round_trip': False,
-            'from_analysis': True
-        }
-
-        # Redirect to calculator page
-        st.switch_page("app.py")  # Remove "pages/" prefix
 if __name__ == "__main__":
     main()
