@@ -14,7 +14,7 @@ from src.data.team_data import get_team_airport, get_airport_coordinates, get_al
 
 app = Flask(__name__)
 # Update CORS to allow all Appsmith domains
-CORS(app, origins=["https://app.appsmith.com", "https://app.appsmith.com/*", "http://localhost:5000"])
+CORS(app, origins=["https://app.appsmith.com", "https://app.appsmith.com/*", "http://localhost:5000", "https://release.app.appsmith.com"], supports_credentials=True)
 calculator = EmissionsCalculator()
 
 def get_db_path():
@@ -222,7 +222,7 @@ def calculate_emissions():
                 'distance': driving_km
             }
         }
-#test
+
         return jsonify({
             'total_emissions': float(result.total_emissions),
             'per_passenger': float(result.per_passenger),
