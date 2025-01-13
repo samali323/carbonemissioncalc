@@ -12,72 +12,119 @@ st.set_page_config(
     layout="wide"
 )
 
-# Enhanced CSS styling
+# CSS styling
 st.markdown("""
     <style>
+    /* Main layout */
     .main {
+        background-color: #0e1117;
+        color: #ffffff;
         padding: 2rem;
     }
-    .match-card {
-        background: linear-gradient(135deg, #f0f2f6 0%, #e6e9ef 100%);
-        border-radius: 15px;
-        padding: 20px;
-        margin: 15px 0;
-        border: 1px solid #e0e0e0;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }
-    .match-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
-    }
-    .match-header {
-        background: linear-gradient(135deg, #262730 0%, #1a1c23 100%);
+    
+    /* Section headers */
+    .section-header {
+        background-color: #0e1117;
+        border-radius: 10px;
+        padding: 1rem;
+        margin: 1.5rem 0;
         color: white;
-        padding: 20px;
-        border-radius: 15px;
-        margin-bottom: 25px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    }
-    .vs-text {
-        color: #ff4b4b;
-        font-weight: bold;
-        font-size: 24px;
-        text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
-    }
-    .competition-tag {
-        background: linear-gradient(135deg, #ff4b4b 0%, #ff6b6b 100%);
-        color: white;
-        padding: 8px 15px;
-        border-radius: 20px;
-        font-size: 14px;
-        font-weight: bold;
-        box-shadow: 0 2px 4px rgba(255, 75, 75, 0.2);
-    }
-    .stButton button {
-        border-radius: 20px;
-        padding: 10px 20px;
-        font-weight: bold;
-        transition: all 0.3s ease;
-    }
-    .stButton button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        text-align: center !important;
     }
     
+    /* Competition summary table */
+    .dataframe {
+        width: 100%;
+        text-align: center !important;
+        background-color: transparent !important;
+        border-collapse: collapse;
+    }
+    
+    .dataframe th {
+        background-color: transparent !important;
+        color: #6B7280 !important;
+        font-weight: normal !important;
+        text-align: center !important;
+        padding: 12px !important;
+        border-bottom: 1px solid #1f2937 !important;
+    }
+    
+    .dataframe td {
+        background-color: transparent !important;
+        color: white !important;
+        text-align: center !important;
+        padding: 12px !important;
+        border-bottom: 1px solid #1f2937 !important;
+    }
+    
+    .dataframe tr:hover td {
+        background-color: #1f2937 !important;
+    }
+    
+    /* Match card */
+    .match-card {
+        background-color: ##0d0c0c;
+        border-radius: 10px;
+        text-align: center !important;
+        padding: 1.5rem;
+        margin: 1rem 0;
+        border: 1px solid #2d3139;
+        transition: transform 0.2s ease;
+    }
+    
+    .match-card:hover {
+        background-color: #2d3139;
+        transform: translateY(-2px);
+    }
+    
+    /* Competition tag */
+    .competition-tag {
+        background-color: #2ea043;
+        color: white;
+        padding: 4px 12px;
+        border-radius: 15px;
+        font-size: 0.9rem;
+    }
+    
+    /* Team & VS text */
+    .team-name {
+        color: white;
+        font-size: 1.1rem;
+    }
+    
+    .vs-text {
+        color: #6B7280;
+        font-size: 1.2rem;
+    }
+    
+    /* Button styling */
+    .stButton > button {
+        background-color: #2ea043 !important;
+        color: white !important;
+        border: none !important;
+        padding: 0.5rem 1rem !important;
+        border-radius: 5px !important;
+        font-weight: bold !important;
+    }
+    
+    .stButton > button:hover {
+        background-color: #3fb950 !important;
+        transform: translateY(-2px);
+    }
+
+    /* Hide index & Streamlit elements */
+    .dataframe th:first-child,
+    .dataframe td:first-child {
+        display: none !important;
+    }
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
     </style>
 """, unsafe_allow_html=True)
 
-def format_time(hours):
-    """Convert hours to HH:MM format"""
-    if pd.isna(hours):
-        return "N/A"
-    total_minutes = int(hours * 60)
-    h = total_minutes // 60
-    m = total_minutes % 60
-    if h == 0:
-        return f"{m}m"
-    return f"{h}h {m}m"
+def format_number(value, decimal_places=2):
+    """Format numbers with commas and specified decimal places"""
+    return f"{value:,.{decimal_places}f}"
 
 def load_data():
     """Load data from database"""
@@ -96,8 +143,6 @@ def load_data():
         """
         df = pd.read_sql_query(query, conn)
         conn.close()
-        df['Driving Time'] = df['driving_hours'].apply(format_time)
-        df['Transit Time'] = df['transit_hours'].apply(format_time)
         return df
     except Exception as e:
         st.error(f"Error loading data: {str(e)}")
@@ -159,60 +204,51 @@ def main():
     if df is None:
         return
 
-    # Competition Summary with enhanced styling
+    # Calculate and display competition summary
+    summary_df = calculate_competition_summary(df)
+    display_summary = summary_df.round(2).sort_values('Total Emissions (tons)', ascending=False)
+
+    # Format summary data
+    for col in display_summary.columns:
+        if col != 'Competition' and col != 'Matches':
+            display_summary[col] = display_summary[col].apply(format_number)
+
     st.markdown("""
-        <div class='match-header'>
+        <div class="section-header">
             <h3>🏆 Competition Summary</h3>
         </div>
     """, unsafe_allow_html=True)
 
-    summary_df = calculate_competition_summary(df)
-    display_summary = summary_df.round(2).sort_values('Total Emissions (tons)', ascending=False)
+    st.dataframe(display_summary, hide_index=True, use_container_width=True)
 
-    # Display summary in a styled container
-    st.markdown("<div class='summary-card'>", unsafe_allow_html=True)
-    st.dataframe(
-        display_summary,
-        hide_index=True,
-        use_container_width=True
-    )
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    # Match Selection with styled filters
+    # Match Selection filters
     st.markdown("""
-        <div class='match-header'>
+        <div class="section-header">
             <h3>🔍 Match Selection</h3>
         </div>
     """, unsafe_allow_html=True)
 
-    # Filters in styled container
-    with st.container():
-        st.markdown("<div class='filter-container'>", unsafe_allow_html=True)
-        col1, col2, col3 = st.columns(3)
+    col1, col2, col3 = st.columns(3)
 
-        with col1:
-            competition_filter = st.selectbox(
-                "🏆 Select Competition",
-                ["All"] + sorted(df['Competition'].unique().tolist())
-            )
+    with col1:
+        competition_filter = st.selectbox(
+            "🏆 Select Competition",
+            ["All"] + sorted(df['Competition'].unique().tolist())
+        )
 
-        with col2:
-            filtered_df = df if competition_filter == "All" else df[df['Competition'] == competition_filter]
-            home_filter = st.selectbox(
-                "🏠 Select Home Team",
-                ["All"] + sorted(filtered_df['Home Team'].unique().tolist())
-            )
+    with col2:
+        filtered_df = df if competition_filter == "All" else df[df['Competition'] == competition_filter]
+        home_filter = st.selectbox(
+            "🏠 Select Home Team",
+            ["All"] + sorted(filtered_df['Home Team'].unique().tolist())
+        )
 
-        with col3:
-            if home_filter != "All":
-                away_teams = df[df['Home Team'] == home_filter]['Away Team'].unique()
-            else:
-                away_teams = filtered_df['Away Team'].unique()
-            away_filter = st.selectbox(
-                "✈️ Select Away Team",
-                ["All"] + sorted(away_teams)
-            )
-        st.markdown("</div>", unsafe_allow_html=True)
+    with col3:
+        away_teams = df['Away Team'].unique() if home_filter == "All" else df[df['Home Team'] == home_filter]['Away Team'].unique()
+        away_filter = st.selectbox(
+            "✈️ Select Away Team",
+            ["All"] + sorted(away_teams)
+        )
 
     # Apply filters
     filtered_df = df.copy()
@@ -223,21 +259,19 @@ def main():
     if away_filter != "All":
         filtered_df = filtered_df[filtered_df['Away Team'] == away_filter]
 
-    # Display matches in cards
+    # Display matches
     for index, row in filtered_df.iterrows():
         st.markdown(f"""
-            <div class='match-card'>
-                <div style='display: flex; justify-content: space-between; align-items: center;'>
-                    <div style='flex: 2;color: black;text-align: center;'>{row['Home Team']}</div>
-                    <div style='flex: 1; text-align: center;'>
-                        <span class='vs-text'>VS</span>
+            <div class="match-card">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div class="team-name" style="flex: 2; text-align: center;">{row['Home Team']}</div>
+                    <div style="flex: 1; text-align: center;">
+                        <span class="vs-text">VS</span>
                     </div>
-                    <div style='flex: 2; color: black; text-align: center;'>{row['Away Team']}</div>
-                    <div style='flex: 1; text-align: right;'>
-                        <span class='competition-tag'>{row['Competition']}</span>
+                    <div class="team-name" style="flex: 2; text-align: center;">{row['Away Team']}</div>
+                    <div style="flex: 1; text-align: right;">
+                        <span class="competition-tag">{row['Competition']}</span>
                     </div>
-                </div>
-                <div style='margin-top: 15px; display: flex; justify-content: space-between; color: #666;'>
                 </div>
             </div>
         """, unsafe_allow_html=True)
