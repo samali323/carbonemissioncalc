@@ -1,33 +1,43 @@
-# pages/2_Analysis.py
 import streamlit as st
 import pandas as pd
-import plotly.graph_objects as go
 import sqlite3
 import os
-
+from pathlib import Path
+from src.data.team_data import get_team_airport, get_airport_coordinates
 from src.models.emissions import EmissionsCalculator
-from src.data.team_data import get_team_airport, get_airport_coordinates, TEAM_COUNTRIES
-from src.utils.calculations import (
-    calculate_transport_emissions,
-    calculate_equivalencies,
-    calculate_flight_time
-)
+from src.utils.calculations import calculate_distance
 
 def get_db_path():
-    """Get the path to the routes database"""
-    return os.path.join('data', 'routes.db')
+    """Get the correct database path"""
+    # Try different possible locations for the database
+    possible_paths = [
+        Path(__file__).parent.parent / "data" / "routes.db",
+        Path(__file__).parent.parent.parent / "data" / "routes.db",
+        Path.cwd() / "data" / "routes.db",
+        Path(os.path.abspath(os.path.dirname(__file__))) / ".." / "data" / "routes.db"
+    ]
 
-def load_matches_data():
-    """Load matches from both database and CSV"""
+    for path in possible_paths:
+        if path.exists():
+            return str(path)
+
+    # If no path found, return default path for error handling
+    return str(possible_paths[0])
+
+def load_data_from_db():
+    """Load match and route data from SQLite database"""
+    db_path = get_db_path()
+
     try:
-        # First, let's load and inspect the CSV
-        matches_df = pd.read_csv('cleaned_matches.csv')
+        # Print path for debugging
+        st.write(f"Attempting to connect to database at: {db_path}")
 
-        # Debug print to check column names
-        st.write("CSV Columns:", matches_df.columns.tolist())
+        # Ensure directory exists
+        os.makedirs(os.path.dirname(db_path), exist_ok=True)
 
-        # Load route information from database
-        conn = sqlite3.connect(get_db_path())
+        conn = sqlite3.connect(db_path)
+
+        # Load routes data
         routes_query = """
         SELECT 
             home_team as "Home Team",
@@ -42,218 +52,137 @@ def load_matches_data():
         routes_df = pd.read_sql_query(routes_query, conn)
         conn.close()
 
-        # Debug print to check route data
-        st.write("Routes Columns:", routes_df.columns.tolist())
-
-        # Merge the dataframes using the correct column names
-        combined_df = pd.merge(
-            matches_df,
-            routes_df,
-            left_on=['Home Team', 'Away Team'],  # Adjust these to match your actual column names
-            right_on=['Home Team', 'Away Team'],
-            how='left'
-        )
-
-        # Debug print of final dataframe
-        st.write("Combined Data Shape:", combined_df.shape)
-        return combined_df
+        return routes_df
 
     except Exception as e:
         st.error(f"Error loading data: {str(e)}")
-        st.write("Current working directory:", os.getcwd())
-        return pd.DataFrame()
-def load_league_summary(matches_df):
-    """Calculate league summary statistics"""
-    calculator = EmissionsCalculator()
+        st.info("Please verify that the database file exists and the path is correct.")
+        return None
 
+def calculate_league_summary(df):
+    """Calculate summary statistics by competition"""
+    calculator = EmissionsCalculator()
     summary_data = []
 
-    # Make sure the Competition column exists
-    if 'Competition' not in matches_df.columns:
-        st.error("Competition column not found in data")
-        return pd.DataFrame()
+    for _, row in df.iterrows():
+        # Get airports
+        home_airport = get_team_airport(row['Home Team'])
+        away_airport = get_team_airport(row['Away Team'])
 
-    # Group matches by competition
-    for comp in matches_df['Competition'].unique():
-        comp_matches = matches_df[matches_df['Competition'] == comp]
-        total_emissions = 0
+        if home_airport and away_airport:
+            # Get coordinates
+            home_coords = get_airport_coordinates(home_airport)
+            away_coords = get_airport_coordinates(away_airport)
 
-        for _, row in comp_matches.iterrows():
-            home_airport = get_team_airport(row['home_team'])
-            away_airport = get_team_airport(row['away_team'])
+            if home_coords and away_coords:
+                # Calculate distance and emissions
+                distance = calculate_distance(
+                    home_coords['lat'], home_coords['lon'],
+                    away_coords['lat'], away_coords['lon']
+                )
 
-            if home_airport and away_airport:
-                home_coords = get_airport_coordinates(home_airport)
-                away_coords = get_airport_coordinates(away_airport)
+                # Calculate emissions using ICAO calculator
+                result = calculator.icao_calculator.calculate_emissions(
+                    distance_km=distance,
+                    aircraft_type="A320",
+                    cabin_class="business",
+                    passengers=30,
+                    cargo_tons=2.0,
+                    is_international=True
+                )
 
-                if home_coords and away_coords:
-                    result = calculator.calculate_flight_emissions(
-                        origin_lat=home_coords['lat'],
-                        origin_lon=home_coords['lon'],
-                        dest_lat=away_coords['lat'],
-                        dest_lon=away_coords['lon'],
-                        passengers=30,
-                        is_round_trip=False
-                    )
-                    total_emissions += result.total_emissions
+                emissions = result["emissions_total_kg"] / 1000  # Convert to metric tons
 
-        summary_data.append({
-            'Competition': comp,
-            'Matches': len(comp_matches),
-            'Total Emissions': total_emissions,
-            'Average': total_emissions / len(comp_matches) if len(comp_matches) > 0 else 0
-        })
+                summary_data.append({
+                    'Teams': f"{row['Home Team']} vs {row['Away Team']}",
+                    'Distance (km)': distance,
+                    'Emissions (tons)': emissions,
+                    'Driving Time (hrs)': row['driving_hours'],
+                    'Transit Time (hrs)': row['transit_hours']
+                })
 
     return pd.DataFrame(summary_data)
+
 def create_analysis_page():
+    """Create the analysis page"""
     st.title("⚽ Football Travel Emissions Analysis")
 
-    # Load data
-    matches_df = load_matches_data()
-
-    if matches_df.empty:
-        st.warning("No match data available")
+    # Add database connection status
+    db_path = get_db_path()
+    st.sidebar.markdown("### Database Status")
+    if os.path.exists(db_path):
+        st.sidebar.success("Database file found")
+    else:
+        st.sidebar.error("Database file not found")
+        st.sidebar.info(f"Looking for database at:\n{db_path}")
         return
 
-    # Create tabs
-    tab1, tab2 = st.tabs(["Summary", "Match Details"])
+    # Load data
+    df = load_data_from_db()
 
-    with tab1:
-        st.header("League Summary")
-        summary_df = load_league_summary(matches_df)
+    if df is None:
+        return
 
-        # Display summary table
-        st.dataframe(
-            summary_df.style.format({
-                'Total Emissions': '{:,.2f}',
-                'Average': '{:,.2f}'
-            }),
-            use_container_width=True
-        )
+    # Display basic statistics
+    st.markdown("### 📊 Dataset Overview")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Total Matches", len(df))
+    with col2:
+        st.metric("Unique Teams", len(set(df['Home Team'].unique()) | set(df['Away Team'].unique())))
+    with col3:
+        st.metric("Date Range", f"{df['last_updated'].min()[:10]} to {df['last_updated'].max()[:10]}")
 
-        # Create summary visualization
-        fig = go.Figure(data=[
-            go.Bar(name='Total Emissions', x=summary_df['Competition'], y=summary_df['Total Emissions']),
-            go.Bar(name='Average per Match', x=summary_df['Competition'], y=summary_df['Average'])
-        ])
+    # Calculate and display summary
+    st.markdown("### 🏆 League Summary")
 
-        fig.update_layout(
-            title='Emissions by League',
-            xaxis_title='Competition',
-            yaxis_title='Metric Tons CO₂'
-        )
+    # Calculate summary statistics
+    summary_df = calculate_league_summary(df)
 
-        st.plotly_chart(fig, use_container_width=True)
+    # Display summary metrics
+    metrics_col1, metrics_col2, metrics_col3 = st.columns(3)
+    with metrics_col1:
+        st.metric("Average Distance", f"{summary_df['Distance (km)'].mean():,.0f} km")
+    with metrics_col2:
+        st.metric("Average Emissions", f"{summary_df['Emissions (tons)'].mean():,.1f} tons")
+    with metrics_col3:
+        st.metric("Total Emissions", f"{summary_df['Emissions (tons)'].sum():,.1f} tons")
 
-    with tab2:
-        st.header("Match Details")
+    # Add filters
+    st.markdown("### 🔍 Match Details")
+    col1, col2 = st.columns(2)
+    with col1:
+        home_filter = st.selectbox("Filter by Home Team", ["All"] + sorted(df['Home Team'].unique().tolist()))
+    with col2:
+        away_filter = st.selectbox("Filter by Away Team", ["All"] + sorted(df['Away Team'].unique().tolist()))
 
-        # Filters
-        col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
+    # Apply filters
+    filtered_df = df.copy()
+    if home_filter != "All":
+        filtered_df = filtered_df[filtered_df['Home Team'] == home_filter]
+    if away_filter != "All":
+        filtered_df = filtered_df[filtered_df['Away Team'] == away_filter]
 
-        with col1:
-            home_filter = st.text_input("Home Team Filter")
-        with col2:
-            away_filter = st.text_input("Away Team Filter")
-        with col3:
-            competition_filter = st.selectbox(
-                "Competition",
-                ["All"] + list(matches_df['Competition'].unique())
-            )
-        with col4:
-            st.write("")
-            st.write("")
-            clear_filters = st.button("Clear Filters")
+    # Display filtered data
+    st.dataframe(
+        filtered_df.sort_values('driving_km', ascending=False),
+        hide_index=True,
+        use_container_width=True
+    )
 
-        # Apply filters
-        filtered_df = matches_df.copy()
-        if home_filter:
-            filtered_df = filtered_df[filtered_df['home_team'].str.contains(home_filter, case=False)]
-        if away_filter:
-            filtered_df = filtered_df[filtered_df['away_team'].str.contains(away_filter, case=False)]
-        if competition_filter != "All":
-            filtered_df = filtered_df[filtered_df['Competition'] == competition_filter]
+    # Add visualization
+    st.markdown("### 📈 Journey Analysis")
+    chart_type = st.selectbox(
+        "Select Chart Type",
+        ["Distance Distribution", "Travel Time Comparison", "Emissions by Distance"]
+    )
 
-        # Display filtered matches
-        st.dataframe(filtered_df, use_container_width=True)
-
-        # Match analysis section
-        st.subheader("Selected Match Analysis")
-        col1, col2 = st.columns([1, 1])
-
-        with col1:
-            selected_home = st.selectbox("Select Home Team", filtered_df['home_team'].unique())
-        with col2:
-            selected_away = st.selectbox("Select Away Team", filtered_df['away_team'].unique())
-
-        if st.button("Analyze Match"):
-            calculator = EmissionsCalculator()
-
-            # Calculate emissions
-            home_airport = get_team_airport(selected_home)
-            away_airport = get_team_airport(selected_away)
-
-            if home_airport and away_airport:
-                home_coords = get_airport_coordinates(home_airport)
-                away_coords = get_airport_coordinates(away_airport)
-
-                if home_coords and away_coords:
-                    result = calculator.calculate_flight_emissions(
-                        origin_lat=home_coords['lat'],
-                        origin_lon=home_coords['lon'],
-                        dest_lat=away_coords['lat'],
-                        dest_lon=away_coords['lon'],
-                        passengers=30,
-                        is_round_trip=False
-                    )
-
-                    # Display analysis results
-                    with st.expander("Flight Details", expanded=True):
-                        st.write(f"🏠 Home Team: {selected_home} ({home_airport})")
-                        st.write(f"🏃 Away Team: {selected_away} ({away_airport})")
-                        st.write(f"📏 Distance: {result.distance_km:.1f} km")
-                        st.write(f"✈️ Flight Type: {result.flight_type}")
-                        st.write(f"📊 Total CO₂: {result.total_emissions:.2f} metric tons")
-
-                    # Transport comparison
-                    with st.expander("Transport Comparison", expanded=True):
-                        match_row = filtered_df[
-                            (filtered_df['home_team'] == selected_home) &
-                            (filtered_df['away_team'] == selected_away)
-                            ].iloc[0]
-
-                        transport_data = pd.DataFrame({
-                            'Mode': ['Air', 'Rail', 'Bus'],
-                            'Time (hours)': [
-                                calculate_flight_time(result.distance_km, False),
-                                match_row['transit_hours'],
-                                match_row['driving_hours']
-                            ],
-                            'Distance (km)': [
-                                result.distance_km,
-                                match_row['transit_km'],
-                                match_row['driving_km']
-                            ],
-                            'CO₂ (tons)': [
-                                result.total_emissions,
-                                calculate_transport_emissions('rail', match_row['transit_km'], 30, False),
-                                calculate_transport_emissions('bus', match_row['driving_km'], 30, False)
-                            ]
-                        })
-
-                        st.dataframe(transport_data)
-
-                    # Environmental impact
-                    with st.expander("Environmental Impact", expanded=True):
-                        impact = calculate_equivalencies(result.total_emissions)
-
-                        cols = st.columns(2)
-                        with cols[0]:
-                            st.metric("Cars Off Road", f"{impact['gasoline_vehicles_year']:.1f}")
-                            st.metric("Trees Required", f"{impact['tree_seedlings_10years']:.0f}")
-                        with cols[1]:
-                            st.metric("Home Energy", f"{impact['homes_energy_year']:.1f}")
-                            st.metric("Waste Recycled", f"{impact['waste_tons_recycled']:.1f}")
+    if chart_type == "Distance Distribution":
+        st.bar_chart(summary_df['Distance (km)'].value_counts(bins=20))
+    elif chart_type == "Travel Time Comparison":
+        st.line_chart(summary_df[['Driving Time (hrs)', 'Transit Time (hrs)']])
+    else:
+        st.scatter_chart(data=summary_df, x='Distance (km)', y='Emissions (tons)')
 
 if __name__ == "__main__":
     create_analysis_page()
