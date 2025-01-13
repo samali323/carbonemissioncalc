@@ -219,14 +219,26 @@ def format_time_duration(seconds: int) -> str:
     """
     Format seconds into hours and minutes string.
     Always shows minutes, only shows hours if > 0
-    """
-    hours = seconds // 3600
-    minutes = (seconds % 3600) // 60
 
-    if hours == 0:
-        return f"{minutes} minutes"
-    else:
-        return f"{hours} hours {minutes} minutes"
+    Args:
+        seconds: Time duration in seconds, can be None
+
+    Returns:
+        Formatted time string or "N/A" if seconds is None
+    """
+    if seconds is None:
+        return "N/A"
+
+    try:
+        hours = int(seconds) // 3600
+        minutes = (int(seconds) % 3600) // 60
+
+        if hours == 0:
+            return f"{minutes} minutes"
+        else:
+            return f"{hours} hours {minutes} minutes"
+    except (TypeError, ValueError):
+        return "N/A"
 
 def calculate_flight_time(distance_km: float, is_round_trip: bool = False) -> int:
     """
