@@ -130,7 +130,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-def display_results(result, home_airport, away_airport):
+def display_results(result):
     """Display calculation results with collapsible sections"""
     if not st.session_state.get('last_calculation', {}).get('calculated'):
         return
@@ -307,19 +307,25 @@ st.markdown("""
 
 def display_transport_comparison(result):
     """Display transport mode comparison"""
+    # Filter out 0km matches for air travel
+    is_derby = result.distance_km == 0
 
-    # Calculate flight time
-    flight_time_seconds = calculate_flight_time(
-        distance_km=result.distance_km / (2 if result.is_round_trip else 1),
-        is_round_trip=result.is_round_trip
-    )
-    flight_time_str = format_time_duration(flight_time_seconds)
+    # Calculate times based on distance
+    if is_derby:
+        flight_time_str = "N/A (Derby Match)"
+        flight_emissions = 0
+    else:
+        flight_time_seconds = calculate_flight_time(
+            distance_km=result.distance_km / (2 if result.is_round_trip else 1),
+            is_round_trip=result.is_round_trip
+        )
+        flight_time_str = format_time_duration(flight_time_seconds)
+        flight_emissions = result.total_emissions
 
     try:
         conn = sqlite3.connect('data/routes.db')
         cursor = conn.cursor()
 
-        # Original query preserved
         query = """
         SELECT 
             transit_duration,
@@ -338,44 +344,48 @@ def display_transport_comparison(result):
         route_data = cursor.fetchone()
 
         if route_data:
-            # For round trips, double the duration and distance
             multiplier = 2 if result.is_round_trip else 1
 
-            transit_time_str = format_time_duration(route_data[0] * multiplier) if route_data[0] else "N/A"
-            transit_distance = route_data[1] * multiplier if route_data[1] else result.distance_km
-            rail_emissions = route_data[2] * multiplier if route_data[2] else 0
-
-            driving_time_str = format_time_duration(route_data[3] * multiplier) if route_data[3] else "N/A"
-            driving_distance = route_data[4] * multiplier if route_data[4] else result.distance_km
-            bus_emissions = route_data[5] * multiplier if route_data[5] else 0
-        else:
-            # Fallback to calculated values
-            transit_time_str = "N/A"
-            transit_distance = result.distance_km
-            rail_emissions = calculate_transport_emissions(
+            transit_time_str = format_time_duration(route_data[0] * multiplier) if route_data[0] else "30 minutes"
+            transit_distance = route_data[1] * multiplier if route_data[1] else (5 if is_derby else result.distance_km)
+            rail_emissions = route_data[2] * multiplier if route_data[2] else calculate_transport_emissions(
                 'rail',
-                result.distance_km,
+                5 if is_derby else result.distance_km,
                 st.session_state.form_state['passengers'],
                 result.is_round_trip
             )
 
-            driving_time_str = "N/A"
-            driving_distance = result.distance_km
+            driving_time_str = format_time_duration(route_data[3] * multiplier) if route_data[3] else "45 minutes"
+            driving_distance = route_data[4] * multiplier if route_data[4] else (5 if is_derby else result.distance_km)
+            bus_emissions = route_data[5] * multiplier if route_data[5] else calculate_transport_emissions(
+                'bus',
+                5 if is_derby else result.distance_km,
+                st.session_state.form_state['passengers'],
+                result.is_round_trip
+            )
+        else:
+            # Default values for derby matches or when no route data exists
+            transit_time_str = "30 minutes" if is_derby else "N/A"
+            transit_distance = 5 if is_derby else result.distance_km
+            rail_emissions = calculate_transport_emissions(
+                'rail',
+                5 if is_derby else result.distance_km,
+                st.session_state.form_state['passengers'],
+                result.is_round_trip
+            )
+
+            driving_time_str = "45 minutes" if is_derby else "N/A"
+            driving_distance = 5 if is_derby else result.distance_km
             bus_emissions = calculate_transport_emissions(
                 'bus',
-                result.distance_km,
+                5 if is_derby else result.distance_km,
                 st.session_state.form_state['passengers'],
                 result.is_round_trip
             )
 
     except Exception as e:
         st.error(f"Error retrieving transport data: {str(e)}")
-        transit_time_str = "N/A"
-        transit_distance = result.distance_km
-        rail_emissions = 0
-        driving_time_str = "N/A"
-        driving_distance = result.distance_km
-        bus_emissions = 0
+        return
 
     finally:
         if 'conn' in locals():
@@ -428,8 +438,8 @@ def display_transport_comparison(result):
             <tr>
                 <td>✈️ Air</td>
                 <td>{flight_time_str}</td>
-                <td>{result.distance_km:,.1f}</td>
-                <td>{result.total_emissions:.2f}</td>
+                <td>{"N/A" if is_derby else f"{result.distance_km:,.1f}"}</td>
+                <td>{flight_emissions:.2f}</td>
                 <td>0.00</td>
             </tr>
             <tr>
@@ -437,20 +447,18 @@ def display_transport_comparison(result):
                 <td>{transit_time_str}</td>
                 <td>{transit_distance:,.1f}</td>
                 <td>{rail_emissions:.2f}</td>
-                <td>{result.total_emissions - rail_emissions:.2f}</td>
+                <td>{max(0, flight_emissions - rail_emissions):.2f}</td>
             </tr>
             <tr>
                 <td>🚌 Bus</td>
                 <td>{driving_time_str}</td>
                 <td>{driving_distance:,.1f}</td>
                 <td>{bus_emissions:.2f}</td>
-                <td>{result.total_emissions - bus_emissions:.2f}</td>
+                <td>{max(0, flight_emissions - bus_emissions):.2f}</td>
             </tr>
         </tbody>
     </table>
     """, unsafe_allow_html=True)
-
-
 def display_carbon_price_analysis(air_emissions, rail_emissions, bus_emissions, away_team, home_team):
     """Display carbon price analysis with proper formatting"""
     st.markdown("### 💰 Carbon Price Analysis")
@@ -787,7 +795,5 @@ with calculate_col2:
 # Display results if they exist in session state
 if 'last_calculation' in st.session_state:
     display_results(
-        st.session_state.last_calculation['result'],
-        st.session_state.last_calculation['home_airport'],
-        st.session_state.last_calculation['away_airport']
+        st.session_state.last_calculation['result']
     )
