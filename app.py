@@ -11,10 +11,11 @@ from src.utils.calculations import (
     calculate_flight_time, format_time_duration, calculate_transit_time, calculate_driving_time,
     determine_mileage_type, calculate_distance, get_carbon_price
 )
+from src.utils.logo_manager import FootballLogoManager
 
 # Initialize calculator
 calculator = EmissionsCalculator()
-
+logo_manager = FootballLogoManager()
 # Set page config
 st.set_page_config(
     page_title="Football Team Flight Emissions Calculator",
@@ -132,6 +133,12 @@ def display_results(result, home_airport, away_airport):
     """Display calculation results with collapsible sections"""
     st.markdown("---")
 
+    # Display team logos at the top
+    logo_manager.display_match_logos(
+        st.session_state.form_state['home_team'],
+        st.session_state.form_state['away_team'],
+        width=150
+    )
     # Summary metrics in a row
     col1, col2, col3, col4 = st.columns(4)
     with col1:
@@ -628,11 +635,17 @@ with st.sidebar:
     4. Click Calculate Emissions
     """)
 
+try:
+    all_teams = sorted(get_all_teams())  # Sort teams alphabetically
+except Exception as e:
+    st.error(f"Error loading team data: {str(e)}")
+    all_teams = []  # Fallback to empty list
+
 # Initialize session state if not exists
 if 'form_state' not in st.session_state:
     st.session_state.form_state = {
-        'home_team': get_all_teams()[0],
-        'away_team': get_all_teams()[0],
+        'home_team': all_teams[0] if all_teams else "",
+        'away_team': all_teams[0] if all_teams else "",
         'passengers': 30,
         'is_round_trip': False
     }
@@ -643,29 +656,38 @@ if 'calculator_input' in st.session_state:
     del st.session_state['calculator_input']
 
 # Create two columns for input
+st.markdown("### 🏟️ Team Selection")
 col1, col2 = st.columns(2)
 
 with col1:
-    st.markdown("### 🏟️ Team Selection")
-    all_teams = get_all_teams()
-
-    # Home team selection
+    st.markdown("#### Home Team")
     home_team = st.selectbox(
-        "Home Team",
+        "Select Home Team",
         options=all_teams,
-        index=all_teams.index(st.session_state.form_state['home_team']),
+        index=all_teams.index(st.session_state.form_state['home_team']) if all_teams else 0,
         key='home_team',
         help="Select the home team"
     )
+    # Add logo display after selection
+    if home_team:
+        home_logo = logo_manager.get_logo(home_team, width=150)
+        if home_logo:
+            st.image(home_logo)
 
-    # Away team selection
+with col2:
+    st.markdown("#### Away Team")
     away_team = st.selectbox(
-        "Away Team",
+        "Select Away Team",
         options=all_teams,
-        index=all_teams.index(st.session_state.form_state['away_team']),
+        index=all_teams.index(st.session_state.form_state['away_team']) if all_teams else 0,
         key='away_team',
         help="Select the away team"
     )
+    # Add logo display after selection
+    if away_team:
+        away_logo = logo_manager.get_logo(away_team, width=150)
+        if away_logo:
+            st.image(away_logo)
 
 with col2:
     st.markdown("### ✈️ Travel Details")

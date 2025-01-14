@@ -20,7 +20,6 @@ if __name__ == "__main__":
 
 
 
-#see if we can add flight times into the database and pull from there?
-#see why clicking round trip opens the dashboard
-#add player salaries
-#
+#added play salaries, now we can do time and money saved
+#first thing to do is fix logo manager, have it saved locally as well
+#how to share this project or atleast the streamlit with others easily.
