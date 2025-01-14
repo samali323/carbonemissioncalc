@@ -110,7 +110,29 @@ class EmissionsCalculator:
         """Calculate emissions for a flight using ICAO methodology."""
         # Calculate base distance (one-way)
         base_distance = calculate_distance(origin_lat, origin_lon, dest_lat, dest_lon)
+        # If distance is very small (e.g., less than 5km), treat as derby match
 
+        if base_distance < 5:
+
+            return EmissionsResult(
+
+                total_emissions=0,
+
+                per_passenger=0,
+
+                distance_km=0,
+
+                corrected_distance_km=0,
+
+                fuel_consumption=0,
+
+                flight_type="N/A: Derby Match",
+
+                is_round_trip=False,
+
+                additional_data={}
+
+            )
         # Calculate base emissions using ICAO calculator
         icao_results = self.icao_calculator.calculate_emissions(
             distance_km=base_distance,
