@@ -1,9 +1,13 @@
 import os
+from typing import Any
+
 import requests
 from pathlib import Path
 import streamlit as st
 from PIL import Image
 from io import BytesIO
+
+from src.data.team_data import get_team_airport
 
 
 # In logo_manager.py
@@ -11,14 +15,29 @@ from io import BytesIO
 @st.cache_data
 def get_resized_logo(_logo_path: str, team_name: str, width: int = 100) -> Image.Image:
     """Get resized logo image with team-specific caching."""
+
     try:
+
         # Create a cache key from the combination of path and team name
-        img = Image.open(_logo_path)
+
+        base_url = "https://raw.githubusercontent.com/samali323/carbonemissioncalc/master/logos/"
+
+        full_url = base_url + _logo_path
+
+        response = requests.get(full_url)
+
+        img = Image.open(BytesIO(response.content))
+
         aspect_ratio = img.height / img.width
+
         height = int(width * aspect_ratio)
+
         return img.resize((width, height))
+
     except Exception as e:
+
         print(f"Error processing logo for {team_name}: {str(e)}")
+
         return None
 
 
@@ -297,72 +316,70 @@ def generate_team_mapping():
 
 
 class FootballLogoManager:
-    def __init__(self):
-        # Set up directory for local logos
-        self.base_url = "https://raw.githubusercontent.com/samali323/carbonemissioncalc/main/logos/"
-        self.league_mapping = {
-            'England - Premier League': 'England - Premier League',
-            'Germany - Bundesliga': 'Germany - Bundesliga',
-            'Spain - LaLiga': 'Spain - LaLiga',
-            'Italy - Serie A': 'Italy - Serie A',
-            'France - Ligue 1': 'France - Ligue 1',
-            'Netherlands - Eredivisie': 'Netherlands - Eredivisie',
-            'Portugal - Liga Portugal': 'Portugal - Liga Portugal',
-            'Belgium - Jupiler Pro League': 'Belgium - Jupiler Pro League',
-            'Scotland - Scottish Premiership': 'Scotland - Scottish Premiership',
-            'Turkey - Super Lig': 'Türkiye - Super Lig',  # Note the special character
-            'Greece - Super League 1': 'Greece - Super League 1',
-            'Ukraine - Premier League': 'Ukraine - Premier League',
-            'Czech Republic - Chance Liga': 'Czech Republic - Chance Liga',
-            'Austria - Bundesliga': 'Austria - Bundesliga',
-            'Switzerland - Super League': 'Switzerland - Super League',
-            'Sweden - Allsvenskan': 'Sweden - Allsvenskan',
-            'Denmark - Superliga': 'Denmark - Superliga'
-        }
-        self.team_mapping = generate_team_mapping()
 
     @st.cache_data
-    def get_logo(self, team_name: str, width: int = 100) -> Image.Image:
+    def get_logo(self, team_name: str, width: int = 80) -> Any:
 
-        """Get team logo as PIL Image from URL."""
+        """
+
+        Get team logo with caching.
+
+
+
+        Args:
+
+            team_name (str): Name of the team (must be string)
+
+            width (int): Width of the logo image
+
+
+
+        Returns:
+
+            Image object or None if logo not found
+
+        """
+
+        # Ensure parameters are hashable types
+
+        team_name = str(team_name)
+
+        width = int(width)
 
         try:
 
-            if team_name not in self.team_mapping:
-                print(f"Team {team_name} not found in mapping")
+            # Get the team's airport from team_data
 
+            team_airport = get_team_airport(team_name)
+
+            if not team_airport:
                 return None
 
-            mapped_path = self.team_mapping[team_name]
+            # Construct logo path
 
-            # Construct the full URL
+            logo_path = f"logos/{team_name.lower().replace(' ', '_')}.png"
 
-            logo_url = f"{self.base_url}{mapped_path}"
+            # Load and resize logo
 
-            # Fetch image from URL
+            base_url = "https://raw.githubusercontent.com/samali323/carbonemissioncalc/master/"
 
-            response = requests.get(logo_url)
+            response = requests.get(base_url + logo_path)
 
-            if response.status_code == 200:
+            img = Image.open(BytesIO(response.content))
 
-                img = Image.open(BytesIO(response.content))
+            # Calculate height maintaining aspect ratio
 
-                aspect_ratio = img.height / img.width
+            aspect_ratio = img.height / img.width
 
-                height = int(width * aspect_ratio)
+            height = int(width * aspect_ratio)
 
-                return img.resize((width, height))
+            return img.resize((width, height))
 
-            else:
-
-                print(f"Failed to fetch logo from {logo_url}")
-
-                return None
 
 
         except Exception as e:
 
-            print(f"Error getting logo for {team_name}: {str(e)}")
+            print(f"Error loading logo for {team_name}: {str(e)}")
 
             return None
 
