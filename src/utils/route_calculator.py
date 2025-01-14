@@ -14,7 +14,7 @@ class RouteCalculator:
         Initialize the RouteCalculator with Google Maps API key and database connection.
         Database will be stored in the project root's data directory.
         """
-        self.api_key = "AIzaSyDgugqSyuk-_wMcdzlR-wt3Mhjf0cUmNuY"
+        self.api_key = " "
         self.gmaps = Client(key=self.api_key)
 
         # Get project root directory (2 levels up from this file)
