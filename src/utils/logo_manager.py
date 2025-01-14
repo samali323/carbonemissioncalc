@@ -11,14 +11,29 @@ from io import BytesIO
 @st.cache_data
 def get_resized_logo(_logo_path: str, team_name: str, width: int = 100) -> Image.Image:
     """Get resized logo image with team-specific caching."""
+
     try:
+
         # Create a cache key from the combination of path and team name
-        img = Image.open(_logo_path)
+
+        base_url = "https://raw.githubusercontent.com/samali323/carbonemissioncalc/master/logos/"
+
+        full_url = base_url + _logo_path
+
+        response = requests.get(full_url)
+
+        img = Image.open(BytesIO(response.content))
+
         aspect_ratio = img.height / img.width
+
         height = int(width * aspect_ratio)
+
         return img.resize((width, height))
+
     except Exception as e:
+
         print(f"Error processing logo for {team_name}: {str(e)}")
+
         return None
 
 
@@ -324,47 +339,32 @@ class FootballLogoManager:
     @st.cache_data
     def get_logo(self, team_name: str, width: int = 100) -> Image.Image:
 
-        """Get team logo as PIL Image from URL."""
+        """Get team logo with caching."""
 
         try:
 
-            if team_name not in self.team_mapping:
-                print(f"Team {team_name} not found in mapping")
+            # Get the URL-encoded path for the team
+
+            mapping = generate_team_mapping()
+
+            if team_name not in mapping:
+                print(f"No logo found for team: {team_name}")
 
                 return None
 
-            mapped_path = self.team_mapping[team_name]
+            logo_path = mapping[team_name]
 
-            # Construct the full URL
+            # Use the cached resize function
 
-            logo_url = f"{self.base_url}{mapped_path}"
+            return get_resized_logo(logo_path, team_name, width)
 
-            # Fetch image from URL
-
-            response = requests.get(logo_url)
-
-            if response.status_code == 200:
-
-                img = Image.open(BytesIO(response.content))
-
-                aspect_ratio = img.height / img.width
-
-                height = int(width * aspect_ratio)
-
-                return img.resize((width, height))
-
-            else:
-
-                print(f"Failed to fetch logo from {logo_url}")
-
-                return None
 
 
         except Exception as e:
 
             print(f"Error getting logo for {team_name}: {str(e)}")
 
-            return None
+        return None
 
     def display_match_logos(self, home_team: str, away_team: str, width: int = 80):
         """Display match logos in columns with team names."""
