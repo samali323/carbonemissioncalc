@@ -1,9 +1,13 @@
 import os
+from typing import Any
+
 import requests
 from pathlib import Path
 import streamlit as st
 from PIL import Image
 from io import BytesIO
+
+from src.data.team_data import get_team_airport
 
 
 # In logo_manager.py
@@ -312,59 +316,72 @@ def generate_team_mapping():
 
 
 class FootballLogoManager:
-    def __init__(self):
-        # Set up directory for local logos
-        self.base_url = "https://raw.githubusercontent.com/samali323/carbonemissioncalc/main/logos/"
-        self.league_mapping = {
-            'England - Premier League': 'England - Premier League',
-            'Germany - Bundesliga': 'Germany - Bundesliga',
-            'Spain - LaLiga': 'Spain - LaLiga',
-            'Italy - Serie A': 'Italy - Serie A',
-            'France - Ligue 1': 'France - Ligue 1',
-            'Netherlands - Eredivisie': 'Netherlands - Eredivisie',
-            'Portugal - Liga Portugal': 'Portugal - Liga Portugal',
-            'Belgium - Jupiler Pro League': 'Belgium - Jupiler Pro League',
-            'Scotland - Scottish Premiership': 'Scotland - Scottish Premiership',
-            'Turkey - Super Lig': 'Türkiye - Super Lig',  # Note the special character
-            'Greece - Super League 1': 'Greece - Super League 1',
-            'Ukraine - Premier League': 'Ukraine - Premier League',
-            'Czech Republic - Chance Liga': 'Czech Republic - Chance Liga',
-            'Austria - Bundesliga': 'Austria - Bundesliga',
-            'Switzerland - Super League': 'Switzerland - Super League',
-            'Sweden - Allsvenskan': 'Sweden - Allsvenskan',
-            'Denmark - Superliga': 'Denmark - Superliga'
-        }
-        self.team_mapping = generate_team_mapping()
 
     @st.cache_data
-    def get_logo(self, team_name: str, width: int = 100) -> Image.Image:
+    def get_logo(self, team_name: str, width: int = 80) -> Any:
 
-        """Get team logo with caching."""
+        """
+
+        Get team logo with caching.
+
+
+
+        Args:
+
+            team_name (str): Name of the team (must be string)
+
+            width (int): Width of the logo image
+
+
+
+        Returns:
+
+            Image object or None if logo not found
+
+        """
+
+        # Ensure parameters are hashable types
+
+        team_name = str(team_name)
+
+        width = int(width)
 
         try:
 
-            # Get the URL-encoded path for the team
+            # Get the team's airport from team_data
 
-            mapping = generate_team_mapping()
+            team_airport = get_team_airport(team_name)
 
-            if team_name not in mapping:
-                print(f"No logo found for team: {team_name}")
-
+            if not team_airport:
                 return None
 
-            logo_path = mapping[team_name]
+            # Construct logo path
 
-            # Use the cached resize function
+            logo_path = f"logos/{team_name.lower().replace(' ', '_')}.png"
 
-            return get_resized_logo(logo_path, team_name, width)
+            # Load and resize logo
+
+            base_url = "https://raw.githubusercontent.com/samali323/carbonemissioncalc/master/"
+
+            response = requests.get(base_url + logo_path)
+
+            img = Image.open(BytesIO(response.content))
+
+            # Calculate height maintaining aspect ratio
+
+            aspect_ratio = img.height / img.width
+
+            height = int(width * aspect_ratio)
+
+            return img.resize((width, height))
 
 
 
         except Exception as e:
 
-            print(f"Error getting logo for {team_name}: {str(e)}")
+            print(f"Error loading logo for {team_name}: {str(e)}")
 
-        return None
+            return None
 
     def display_match_logos(self, home_team: str, away_team: str, width: int = 80):
         """Display match logos in columns with team names."""
