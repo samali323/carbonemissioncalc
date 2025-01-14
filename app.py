@@ -1,15 +1,14 @@
-import os
 import sqlite3
+
 import streamlit as st
-import pandas as pd
+
 from src.config.constants import SOCIAL_CARBON_COSTS
-from src.models.emissions import EmissionsCalculator, EmissionsResult
 from src.data.team_data import get_all_teams, get_team_airport, get_airport_coordinates, TEAM_COUNTRIES
+from src.models.emissions import EmissionsCalculator
 from src.utils.calculations import (
     calculate_transport_emissions,
     calculate_equivalencies,
-    calculate_flight_time, format_time_duration, calculate_transit_time, calculate_driving_time,
-    determine_mileage_type, calculate_distance, get_carbon_price
+    calculate_flight_time, format_time_duration, get_carbon_price
 )
 from src.utils.logo_manager import FootballLogoManager
 
@@ -129,6 +128,8 @@ st.markdown("""
     }
     </style>
 """, unsafe_allow_html=True)
+
+
 def display_results(result, home_airport, away_airport):
     """Display calculation results with collapsible sections"""
     if not st.session_state.get('last_calculation', {}).get('calculated'):
@@ -143,45 +144,40 @@ def display_results(result, home_airport, away_airport):
     st.markdown("---")
 
     # Display match title and logos
-    col1, col2, col3 = st.columns([2, 1, 2])
+    col1, col2, col3 = st.columns([1.5, 1, 1])
 
     with col1:
-        # Create a sub-container for home team with logo and name side by side
         st.container()
-        home_logo = logo_manager.get_logo(home_team, width=150)
+        home_logo = logo_manager.get_logo(home_team, width=90)
         if home_logo:
-            lcol1, lcol2 = st.columns([1, 1])
-            with lcol1:
-                st.image(home_logo)
-            with lcol2:
-                st.markdown(f"""
-                    <div style='display: flex; height: 180px; align-items: center;'>
-                        <h3 style='margin: ;'>{home_team}</h3>
-                    </div>
-                """, unsafe_allow_html=True)
+            col_logo, col_name = st.columns([1, 2])
+            with col_logo:
+                st.image(home_logo, width=80)
+            with col_name:
+                st.markdown(
+                    f"<h3 style='margin: 0; font-size: 24px; height: 80px; line-height: 80px;'>{home_team}</h3>",
+                    unsafe_allow_html=True)
 
     with col2:
-        # Center VS text vertically and horizontally
+        # Adjusted VS alignment and height to match team sections
         st.markdown("""
-            <div style='display: flex; height: 180px; align-items: center; justify-content: center;'>
-                <h3 style='margin: 0;'>VS</h3>
+            <div style='display: flex; height: 80px; align-items: left; justify-content: left;'>
+                <h3 style='margin: 0; font-size: 24px;'>VS</h3>
             </div>
         """, unsafe_allow_html=True)
 
     with col3:
-        # Create a sub-container for away team with logo and name side by side
         st.container()
-        away_logo = logo_manager.get_logo(away_team, width=150)
+        away_logo = logo_manager.get_logo(away_team, width=90)
         if away_logo:
-            rcol1, rcol2 = st.columns([1, 1])
-            with rcol1:
-                st.image(away_logo)
-            with rcol2:
-                st.markdown(f"""
-                    <div style='display: flex; height: 150px; align-items: center;'>
-                        <h3 style='margin: 0;'>{away_team}</h3>
-                    </div>
-                """, unsafe_allow_html=True)
+            col_logo, col_name = st.columns([1, 2])
+            with col_logo:
+                st.image(away_logo, width=90)
+            with col_name:
+                st.markdown(
+                    f"<h3 style='margin: 0; font-size: 24px; height: 80px; line-height: 80px;'>{away_team}</h3>",
+                    unsafe_allow_html=True)
+
     # Summary metrics in a row
     col1, col2, col3, col4 = st.columns(4)
     with col1:
@@ -198,7 +194,7 @@ def display_results(result, home_airport, away_airport):
         display_transport_comparison(result)
 
     # Environmental Impact (always expanded)
-    with st.expander("🌍 Environmental Impact", expanded=True):
+    with st.expander("🌍 Environmental Impact", expanded=False):
         impact = calculate_equivalencies(result.total_emissions)
 
         col1, col2 = st.columns(2)
@@ -232,7 +228,7 @@ def display_results(result, home_airport, away_airport):
             st.markdown(f"• {impact['oil_barrels']:.2f} Barrels of oil")
 
     # Cost Analysis (collapsible)
-    with st.expander("💰 Cost Analysis", expanded=True):
+    with st.expander("💰 Cost Analysis", expanded=False):
         rail_emissions = calculate_transport_emissions(
             'rail',
             result.distance_km,
@@ -254,6 +250,7 @@ def display_results(result, home_airport, away_airport):
             away_team=st.session_state.form_state['away_team'],
             home_team=st.session_state.form_state['home_team']
         )
+
 
 def display_environmental_impact(impact):
     """Display environmental impact with consistent formatting"""
@@ -295,6 +292,7 @@ def display_environmental_impact(impact):
         st.markdown(f"• {impact['propane_cylinders']:,.0f} Propane cylinders for BBQ")
         st.markdown(f"• {impact['oil_barrels']:.2f} Barrels of oil")
 
+
 # Add custom CSS for consistent spacing and alignment
 st.markdown("""
     <style>
@@ -307,6 +305,7 @@ st.markdown("""
     }
     </style>
 """, unsafe_allow_html=True)
+
 
 def display_transport_comparison(result):
     """Display transport mode comparison"""
@@ -452,6 +451,7 @@ def display_transport_comparison(result):
         </tbody>
     </table>
     """, unsafe_allow_html=True)
+
 
 def display_carbon_price_analysis(air_emissions, rail_emissions, bus_emissions, away_team, home_team):
     """Display carbon price analysis with proper formatting"""
@@ -615,6 +615,8 @@ def display_carbon_price_analysis(air_emissions, rail_emissions, bus_emissions, 
     </table>
     """
     st.markdown(social_html, unsafe_allow_html=True)
+
+
 def calculate_and_display():
     """Calculate and display emissions results"""
     try:
@@ -665,6 +667,7 @@ def calculate_and_display():
 
     except Exception as e:
         st.error(f"Error calculating emissions: {str(e)}")
+
 
 # Main layout
 st.title("⚽ Football Team Flight Emissions Calculator")

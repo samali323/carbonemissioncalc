@@ -232,9 +232,9 @@ class FootballLogoManager:
             print(f"Error getting logo for {team_name}: {str(e)}")
             return None
 
-    def display_match_logos(self, home_team: str, away_team: str, width: int = 100):
+    def display_match_logos(self, home_team: str, away_team: str, width: int = 80):
         """Display match logos in columns with team names."""
-        col1, col2, col3 = st.columns([2, 1, 2])
+        col1, col2, col3 = st.columns([2,1,2])
 
         with col1:
             # Create unique container for home team
