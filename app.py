@@ -144,11 +144,11 @@ def display_results(result, home_airport, away_airport):
     st.markdown("---")
 
     # Display match title and logos
-    col1, col2, col3 = st.columns([1.5, 1, 1])
+    col1, col2, col3 = st.columns([.5, .5, .5])
 
     with col1:
         st.container()
-        home_logo = logo_manager.get_logo(home_team, width=90)
+        home_logo = logo_manager.get_logo(home_team, width=80)
         if home_logo:
             col_logo, col_name = st.columns([1, 2])
             with col_logo:
@@ -159,20 +159,18 @@ def display_results(result, home_airport, away_airport):
                     unsafe_allow_html=True)
 
     with col2:
-        # Adjusted VS alignment and height to match team sections
         st.markdown("""
-            <div style='display: flex; height: 80px; align-items: left; justify-content: left;'>
-                <h3 style='margin: 0; font-size: 24px;'>VS</h3>
+            <div style='display: flex; height: 80px; align-items: center; justify-content: center;'>
+                <span style='margin: 0; font-size: 24px;'>VS</span>
             </div>
         """, unsafe_allow_html=True)
-
     with col3:
         st.container()
-        away_logo = logo_manager.get_logo(away_team, width=90)
+        away_logo = logo_manager.get_logo(away_team, width=80)
         if away_logo:
             col_logo, col_name = st.columns([1, 2])
             with col_logo:
-                st.image(away_logo, width=90)
+                st.image(away_logo, width=80)
             with col_name:
                 st.markdown(
                     f"<h3 style='margin: 0; font-size: 24px; height: 80px; line-height: 80px;'>{away_team}</h3>",
@@ -711,7 +709,15 @@ if 'form_state' not in st.session_state:
 
 # Check for match selection from analysis page
 if 'calculator_input' in st.session_state:
+
     st.session_state.form_state.update(st.session_state.calculator_input)
+
+    # If auto_calculate flag is set, trigger calculation immediately
+
+    if st.session_state.calculator_input.get('auto_calculate', False):
+        with st.spinner("Calculating emissions..."):
+            calculate_and_display()
+
     del st.session_state['calculator_input']
 
 # Create two columns for input

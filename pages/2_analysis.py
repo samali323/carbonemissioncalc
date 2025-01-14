@@ -389,7 +389,8 @@ def main():
                         'away_team': row['Away Team'],
                         'passengers': 30,
                         'is_round_trip': False,
-                        'from_analysis': True
+                        'from_analysis': True,
+                        'auto_calculate': True  # Add this flag
                     }
                     st.switch_page("app.py")
 if __name__ == "__main__":
