@@ -12,119 +12,264 @@ st.set_page_config(
     layout="wide"
 )
 
-# CSS styling
 st.markdown("""
+
     <style>
+
     /* Main layout */
+
     .main {
+
         background-color: #0e1117;
+
         color: #ffffff;
+
         padding: 2rem;
-    }
-    
-    /* Section headers */
-    .section-header {
-        background-color: #0e1117;
-        border-radius: 10px;
-        padding: 1rem;
-        margin: 1.5rem 0;
-        color: white;
-        text-align: center !important;
-    }
-    
-    /* Competition summary table */
-    .dataframe {
-        width: 100%;
-        text-align: center !important;
-        background-color: transparent !important;
-        border-collapse: collapse;
-    }
-    
-    .dataframe th {
-        background-color: transparent !important;
-        color: #6B7280 !important;
-        font-weight: normal !important;
-        text-align: center !important;
-        padding: 12px !important;
-        border-bottom: 1px solid #1f2937 !important;
-    }
-    
-    .dataframe td {
-        background-color: transparent !important;
-        color: white !important;
-        text-align: center !important;
-        padding: 12px !important;
-        border-bottom: 1px solid #1f2937 !important;
-    }
-    
-    .dataframe tr:hover td {
-        background-color: #1f2937 !important;
-    }
-    
-    /* Match card */
-    .match-card {
-        background-color: ##0d0c0c;
-        border-radius: 10px;
-        text-align: center !important;
-        padding: 1.5rem;
-        margin: 1rem 0;
-        border: 1px solid #2d3139;
-        transition: transform 0.2s ease;
-    }
-    
-    .match-card:hover {
-        background-color: #2d3139;
-        transform: translateY(-2px);
-    }
-    
-    /* Competition tag */
-    .competition-tag {
-        background-color: #2ea043;
-        color: white;
-        padding: 4px 12px;
-        border-radius: 15px;
-        font-size: 0.9rem;
-    }
-    
-    /* Team & VS text */
-    .team-name {
-        color: white;
-        font-size: 1.1rem;
-    }
-    
-    .vs-text {
-        color: #6B7280;
-        font-size: 1.2rem;
-    }
-    
-    /* Button styling */
-    .stButton > button {
-        background-color: #2ea043 !important;
-        color: white !important;
-        border: none !important;
-        padding: 0.5rem 1rem !important;
-        border-radius: 5px !important;
-        font-weight: bold !important;
-    }
-    
-    .stButton > button:hover {
-        background-color: #3fb950 !important;
-        transform: translateY(-2px);
+
     }
 
-    /* Hide index & Streamlit elements */
-    .dataframe th:first-child,
-    .dataframe td:first-child {
-        display: none !important;
+    
+
+    /* Section headers */
+
+    .section-header {
+
+        background-color: #0e1117;
+
+        border-radius: 10px;
+
+        padding: 1rem;
+
+        margin: 1.5rem 0;
+
+        color: white;
+
+        text-align: center !important;
+
     }
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
+
+    
+
+    /* Styled table for competition summary */
+
+    .styled-table {
+
+        margin: 25px auto;
+
+        width: 100%;
+
+        text-align: center;
+
+        border-collapse: collapse;
+
+        background-color: #0e1117;
+
+        border-radius: 10px;
+
+        overflow: hidden;
+
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+
+    }
+
+    
+
+    .styled-table th {
+
+        background-color: #1f2937;
+
+        color: #6B7280;
+
+        padding: 12px;
+
+        text-align: center;
+
+        font-weight: normal;
+
+        border-bottom: 1px solid #2d3139;
+
+    }
+
+    
+
+    .styled-table td {
+
+        padding: 12px;
+
+        text-align: center;
+
+        color: white;
+
+        border-bottom: 1px solid #2d3139;
+
+    }
+
+    
+
+    .styled-table tr:hover {
+
+        background-color: #2d3139;
+
+    }
+
+    
+
+    /* Center the entire table container */
+
+    [data-testid="stDataFrame"] {
+
+        width: 100%;
+
+        margin: 0 auto;
+
+        display: flex;
+
+        justify-content: center;
+
+    }
+
+    
+
+    /* Center text in all table cells */
+
+    [data-testid="stDataFrame"] div[style*="overflow"] {
+
+        display: flex;
+
+        justify-content: center;
+
+        text-align: center;
+
+    }
+
+    
+
+    /* Remove default Streamlit table styling */
+
+    .element-container div[data-testid="stDataFrame"] > div {
+
+        background-color: transparent !important;
+
+    }
+
+    
+
+    /* Match card styling */
+
+    .match-card {
+
+        background-color: #0d0c0c;
+
+        border-radius: 10px;
+
+        text-align: center !important;
+
+        padding: 1.5rem;
+
+        margin: 1rem 0;
+
+        border: 1px solid #2d3139;
+
+        transition: transform 0.2s ease;
+
+    }
+
+    
+
+    .match-card:hover {
+
+        background-color: #2d3139;
+
+        transform: translateY(-2px);
+
+    }
+
+    
+
+    /* Select box styling */
+
+    div[data-baseweb="select"] {
+
+        margin: 0 auto;
+
+        text-align: center;
+
+    }
+
+    
+
+    .stSelectbox {
+
+        text-align: center;
+
+    }
+
+    
+
+    .stSelectbox > div > div {
+
+        text-align: center;
+
+        background-color: #1f2937;
+
+        border: 1px solid #2d3139;
+
+    }
+
+    
+
+    .stSelectbox > label {
+
+        text-align: center;
+
+        width: 100%;
+
+        color: #6B7280;
+
+    }
+
+    
+
+    div[role="listbox"] {
+
+        background-color: #1f2937;
+
+        border: 1px solid #2d3139;
+
+    }    
+
+    [data-testid="stDataFrame"] td {
+
+        text-align: center !important;
+
+    }
+   
+    [data-testid="stDataFrame"] th {
+        text-align: center !important;
+    }
+
+    
+
+    /* Center the contents of each cell */
+
+    [data-testid="stDataFrame"] div[style*="overflow"] {
+
+        display: flex;
+
+        justify-content: center;
+
+        text-align: center;
+
+    }
+
     </style>
 """, unsafe_allow_html=True)
+
 
 def format_number(value, decimal_places=2):
     """Format numbers with commas and specified decimal places"""
     return f"{value:,.{decimal_places}f}"
+
 
 def load_data():
     """Load data from database"""
@@ -147,6 +292,7 @@ def load_data():
     except Exception as e:
         st.error(f"Error loading data: {str(e)}")
         return None
+
 
 def calculate_competition_summary(df):
     """Calculate summary statistics by competition"""
@@ -196,7 +342,9 @@ def calculate_competition_summary(df):
 
     return pd.DataFrame(summary_data)
 
+
 def main():
+
     st.title('⚽ Football Travel Emissions Analysis')
 
     # Load data
@@ -228,6 +376,28 @@ def main():
         </div>
     """, unsafe_allow_html=True)
 
+    # Add this CSS before your columns code
+    st.markdown("""
+        <style>
+        div[data-baseweb="select"] {
+            margin: 0 auto;
+            text-align: center;
+        }
+        .stSelectbox {
+            text-align: center;
+        }
+        .stSelectbox > div > div {
+            text-align: center;
+        }
+        /* Center the select box labels */
+        .stSelectbox > label {
+            text-align: center;
+            width: 100%;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
+    # Then your existing columns code
     col1, col2, col3 = st.columns(3)
 
     with col1:
@@ -249,7 +419,6 @@ def main():
             "✈️ Select Away Team",
             ["All"] + sorted(away_teams)
         )
-
     # Apply filters
     filtered_df = df.copy()
     if competition_filter != "All":
