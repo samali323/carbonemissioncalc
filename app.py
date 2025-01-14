@@ -131,14 +131,37 @@ st.markdown("""
 """, unsafe_allow_html=True)
 def display_results(result, home_airport, away_airport):
     """Display calculation results with collapsible sections"""
+    if not st.session_state.get('last_calculation', {}).get('calculated'):
+        return
+
+    home_team = st.session_state.last_calculation.get('home_team')
+    away_team = st.session_state.last_calculation.get('away_team')
+
+    if not home_team or not away_team:
+        return
+
     st.markdown("---")
 
-    # Display team logos at the top
-    logo_manager.display_match_logos(
-        st.session_state.form_state['home_team'],
-        st.session_state.form_state['away_team'],
-        width=150
-    )
+    # Display match title and logos with unique keys
+    col1, col2, col3 = st.columns([2, 1, 2])
+
+    with col1:
+        st.markdown(f"<h3 style='text-align: center;'>{home_team}</h3>", unsafe_allow_html=True)
+        with st.container(key=f"home_logo_container_{home_team}"):
+            home_logo = logo_manager.get_logo(home_team, width=150)
+            if home_logo:
+                st.image(home_logo)
+
+    with col2:
+        st.markdown("<h3 style='text-align: center; margin-top: 50px;'>VS</h3>", unsafe_allow_html=True)
+
+    with col3:
+        st.markdown(f"<h3 style='text-align: center;'>{away_team}</h3>", unsafe_allow_html=True)
+        with st.container(key=f"away_logo_container_{away_team}"):
+            away_logo = logo_manager.get_logo(away_team, width=150)
+            if away_logo:
+                st.image(away_logo)
+
     # Summary metrics in a row
     col1, col2, col3, col4 = st.columns(4)
     with col1:
@@ -575,9 +598,19 @@ def display_carbon_price_analysis(air_emissions, rail_emissions, bus_emissions, 
 def calculate_and_display():
     """Calculate and display emissions results"""
     try:
-        # Get airports and coordinates
-        home_airport = get_team_airport(st.session_state.form_state['home_team'])
-        away_airport = get_team_airport(st.session_state.form_state['away_team'])
+        # Reset previous results first
+        if 'last_calculation' in st.session_state:
+            del st.session_state.last_calculation
+
+        # Get teams and verify they're selected
+        home_team = st.session_state.form_state['home_team']
+        away_team = st.session_state.form_state['away_team']
+
+        if not home_team or not away_team:
+            return
+
+        home_airport = get_team_airport(home_team)
+        away_airport = get_team_airport(away_team)
 
         if not home_airport or not away_airport:
             st.error("Airport not found for one or both teams")
@@ -600,11 +633,14 @@ def calculate_and_display():
             is_round_trip=st.session_state.form_state['is_round_trip']
         )
 
-        # Store calculation in session state
+        # Store all necessary information in session state
         st.session_state.last_calculation = {
             'result': result,
             'home_airport': home_airport,
-            'away_airport': away_airport
+            'away_airport': away_airport,
+            'home_team': home_team,
+            'away_team': away_team,
+            'calculated': True  # Add a flag to indicate calculation is complete
         }
 
     except Exception as e:
@@ -668,11 +704,6 @@ with col1:
         key='home_team',
         help="Select the home team"
     )
-    # Add logo display after selection
-    if home_team:
-        home_logo = logo_manager.get_logo(home_team, width=150)
-        if home_logo:
-            st.image(home_logo)
 
 with col2:
     st.markdown("#### Away Team")
@@ -683,11 +714,6 @@ with col2:
         key='away_team',
         help="Select the away team"
     )
-    # Add logo display after selection
-    if away_team:
-        away_logo = logo_manager.get_logo(away_team, width=150)
-        if away_logo:
-            st.image(away_logo)
 
 with col2:
     st.markdown("### ✈️ Travel Details")
