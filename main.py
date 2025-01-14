@@ -18,8 +18,4 @@ def main():
 if __name__ == "__main__":
     main()
 
-
-
-#added play salaries, now we can do time and money saved
-#first thing to do is fix logo manager, have it saved locally as well
 #how to share this project or atleast the streamlit with others easily.
