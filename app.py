@@ -142,26 +142,46 @@ def display_results(result, home_airport, away_airport):
 
     st.markdown("---")
 
-    # Display match title and logos with unique keys
+    # Display match title and logos
     col1, col2, col3 = st.columns([2, 1, 2])
 
     with col1:
-        st.markdown(f"<h3 style='text-align: center;'>{home_team}</h3>", unsafe_allow_html=True)
-        with st.container(key=f"home_logo_container_{home_team}"):
-            home_logo = logo_manager.get_logo(home_team, width=150)
-            if home_logo:
+        # Create a sub-container for home team with logo and name side by side
+        st.container()
+        home_logo = logo_manager.get_logo(home_team, width=150)
+        if home_logo:
+            lcol1, lcol2 = st.columns([1, 1])
+            with lcol1:
                 st.image(home_logo)
+            with lcol2:
+                st.markdown(f"""
+                    <div style='display: flex; height: 180px; align-items: center;'>
+                        <h3 style='margin: ;'>{home_team}</h3>
+                    </div>
+                """, unsafe_allow_html=True)
 
     with col2:
-        st.markdown("<h3 style='text-align: center; margin-top: 50px;'>VS</h3>", unsafe_allow_html=True)
+        # Center VS text vertically and horizontally
+        st.markdown("""
+            <div style='display: flex; height: 180px; align-items: center; justify-content: center;'>
+                <h3 style='margin: 0;'>VS</h3>
+            </div>
+        """, unsafe_allow_html=True)
 
     with col3:
-        st.markdown(f"<h3 style='text-align: center;'>{away_team}</h3>", unsafe_allow_html=True)
-        with st.container(key=f"away_logo_container_{away_team}"):
-            away_logo = logo_manager.get_logo(away_team, width=150)
-            if away_logo:
+        # Create a sub-container for away team with logo and name side by side
+        st.container()
+        away_logo = logo_manager.get_logo(away_team, width=150)
+        if away_logo:
+            rcol1, rcol2 = st.columns([1, 1])
+            with rcol1:
                 st.image(away_logo)
-
+            with rcol2:
+                st.markdown(f"""
+                    <div style='display: flex; height: 150px; align-items: center;'>
+                        <h3 style='margin: 0;'>{away_team}</h3>
+                    </div>
+                """, unsafe_allow_html=True)
     # Summary metrics in a row
     col1, col2, col3, col4 = st.columns(4)
     with col1:
@@ -693,7 +713,7 @@ if 'calculator_input' in st.session_state:
 
 # Create two columns for input
 st.markdown("### 🏟️ Team Selection")
-col1, col2 = st.columns(2)
+col1, col2 = st.columns([1, 1])
 
 with col1:
     st.markdown("#### Home Team")
@@ -715,15 +735,18 @@ with col2:
         help="Select the away team"
     )
 
-with col2:
+    # Make number of passengers input smaller
     st.markdown("### ✈️ Travel Details")
-    passengers = st.number_input(
-        "Number of Passengers",
-        min_value=1,
-        value=st.session_state.form_state['passengers'],
-        help="Enter the total number of passengers traveling",
-        key='passengers'
-    )
+    col_pass1, col_pass2 = st.columns([2, 1])  # Create sub-columns for passenger input
+    with col_pass1:
+        passengers = st.number_input(
+            "Number of Passengers",
+            min_value=1,
+            value=st.session_state.form_state['passengers'],
+            help="Enter the total number of passengers traveling",
+            key='passengers',
+            label_visibility="collapsed"  # Hide label to save space
+        )
 
     is_round_trip = st.checkbox(
         "Round Trip",
