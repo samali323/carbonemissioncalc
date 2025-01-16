@@ -112,7 +112,7 @@ class EmissionsCalculator:
         base_distance = calculate_distance(origin_lat, origin_lon, dest_lat, dest_lon)
         # If distance is very small (e.g., less than 5km), treat as derby match
 
-        if base_distance < 5:
+        if base_distance < 15:
 
             return EmissionsResult(
 

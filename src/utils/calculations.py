@@ -1,5 +1,6 @@
 import math
-from typing import Dict
+import sqlite3
+from typing import Dict, Optional
 
 from src.config.constants import (
     TRANSPORT_MODES,
@@ -35,78 +36,71 @@ def determine_mileage_type(distance_km: float) -> str:
         return "Long"
 
 
-def calculate_transport_emissions(mode: str, distance_km: float, passengers: int = 30, is_round_trip: bool = False, home_team: str = None, away_team: str = None) -> float:
+def calculate_transport_emissions(
+        mode: str,
+        distance_km: float,
+        passengers: int = 30,
+        is_round_trip: bool = False,
+        home_team: str = None,
+        away_team: str = None
+) -> Optional[float]:
     """Calculate emissions for different transport modes."""
-
     if distance_km == 0:
-        return 0.0
+        return None
 
-    # Calculate base distance (one-way)
+    # Get route details from database
+    conn = sqlite3.connect("data/routes.db")
+    cursor = conn.cursor()
 
-    base_distance = distance_km / (2 if is_round_trip else 1)
+    try:
+        cursor.execute("""
+            SELECT driving_duration, transit_duration
+            FROM routes 
+            WHERE home_team = ? AND away_team = ?
+        """, (home_team, away_team))
 
-    if mode == 'air':
+        row = cursor.fetchone()
 
-        # Get airport codes for both teams
+        # If we have no route data or durations are null, route is infeasible
+        if not row:
+            if mode in ['rail', 'bus']:
+                return None
+        else:
+            driving_duration, transit_duration = row
+            if mode == 'rail' and (transit_duration is None or transit_duration == 0):
+                return None
+            if mode == 'bus' and (driving_duration is None or driving_duration == 0):
+                return None
 
-        home_airport = get_team_airport(home_team)
+        # Calculate as before for feasible routes
+        base_distance = distance_km / (2 if is_round_trip else 1)
 
-        away_airport = get_team_airport(away_team)
-
-        # Get coordinates for both airports
-
-        home_coords = get_airport_coordinates(home_airport)
-
-        away_coords = get_airport_coordinates(away_airport)
-
-        if home_coords and away_coords:
-
-            # Create ICAO calculator instance
-
+        if mode == 'air':
             calculator = ICAOEmissionsCalculator()
-
-            # Calculate using ICAO method
-
             result = calculator.calculate_emissions(
-
-                distance_km=base_distance,  # Use base distance
-
+                distance_km=base_distance,
                 aircraft_type="A320",
-
                 cabin_class="business",
-
                 passengers=passengers,
-
                 cargo_tons=2.0,
-
                 is_international=True
-
             )
-
-            # Calculate total emissions
-
-            total_emissions = result["emissions_total_kg"] / 1000  # Convert to metric tons
-
+            total_emissions = result["emissions_total_kg"] / 1000
             if is_round_trip:
                 total_emissions *= 2
-
             return total_emissions
 
+        elif mode in ['rail', 'bus']:
+            mode_config = TRANSPORT_MODES[mode]
+            adjusted_distance = base_distance * mode_config['distance_multiplier']
+            emissions_per_passenger_km = mode_config['co2_per_km']
+            total_emissions = (adjusted_distance * emissions_per_passenger_km * passengers) / 1000
+            if is_round_trip:
+                total_emissions *= 2
+            return total_emissions
 
-    elif mode in ['rail', 'bus']:
-
-        mode_config = TRANSPORT_MODES[mode]
-
-        adjusted_distance = base_distance * mode_config['distance_multiplier']
-
-        emissions_per_passenger_km = mode_config['co2_per_km']
-
-        total_emissions = (adjusted_distance * emissions_per_passenger_km * passengers) / 1000
-
-        if is_round_trip:
-            total_emissions *= 2
-
-        return total_emissions
+    finally:
+        conn.close()
 
 
 def get_carbon_price(away_team: str, home_team: str) -> float:
