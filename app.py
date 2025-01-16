@@ -304,16 +304,44 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+def parse_time_duration(time_str):
+    """Convert time string (e.g. '2 hours 30 minutes') to seconds"""
+    total_seconds = 0
+    parts = time_str.split()
 
+    for i in range(0, len(parts)-1, 2):
+        value = int(parts[i])
+        unit = parts[i+1]
+
+        if 'hour' in unit:
+            total_seconds += value * 3600
+        elif 'minute' in unit:
+            total_seconds += value * 60
+
+    return total_seconds
+
+def format_time_diff(seconds_diff):
+    """Format time difference (in seconds) to +/- string"""
+    if seconds_diff == 0:
+        return "-"
+
+    sign = "+" if seconds_diff > 0 else "-"
+    abs_diff = abs(seconds_diff)
+
+    hours = abs_diff // 3600
+    minutes = (abs_diff % 3600) // 60
+
+    if hours > 0:
+        return f"{sign}{hours}h {minutes}m"
+    return f"{sign}{minutes}m"
 def display_transport_comparison(result):
     """Display transport mode comparison"""
-    # Filter out 0km matches for air travel
     is_derby = result.distance_km == 0
 
-    # Calculate times based on distance
     if is_derby:
         flight_time_str = "N/A (Derby Match)"
         flight_emissions = 0
+        flight_time_seconds = 0
     else:
         flight_time_seconds = calculate_flight_time(
             distance_km=result.distance_km / (2 if result.is_round_trip else 1),
@@ -326,47 +354,50 @@ def display_transport_comparison(result):
         conn = sqlite3.connect('data/routes.db')
         cursor = conn.cursor()
 
-        query = """
-        SELECT 
-            transit_duration,
-            transit_distance,
-            rail_emissions,
-            driving_duration,
-            driving_distance,
-            bus_emissions
-        FROM match_emissions
-        WHERE distance_km = ? 
-        ORDER BY last_updated DESC
-        LIMIT 1
-        """
+        cursor.execute("""
+       SELECT 
+           transit_duration,
+           transit_distance,
+           rail_emissions,
+           driving_duration,
+           driving_distance,
+           bus_emissions
+       FROM match_emissions
+       WHERE distance_km = ? 
+       ORDER BY last_updated DESC
+       LIMIT 1
+       """, (result.distance_km / (2 if result.is_round_trip else 1),))
 
-        cursor.execute(query, (result.distance_km / (2 if result.is_round_trip else 1),))
         route_data = cursor.fetchone()
 
         if route_data:
             multiplier = 2 if result.is_round_trip else 1
 
-            transit_time_str = format_time_duration(route_data[0] * multiplier) if route_data[0] else "30 minutes"
-            transit_distance = route_data[1] * multiplier if route_data[1] else (5 if is_derby else result.distance_km)
+            transit_time_seconds = route_data[0] * multiplier if route_data[0] else 1800
+            transit_time_str = format_time_duration(transit_time_seconds)
+            transit_time_diff = format_time_diff(transit_time_seconds - flight_time_seconds)
+            transit_distance = route_data[1] * multiplier if route_data[1] else (15 if is_derby else result.distance_km)
             rail_emissions = route_data[2] * multiplier if route_data[2] else calculate_transport_emissions(
                 'rail',
-                5 if is_derby else result.distance_km,
+                15 if is_derby else result.distance_km,
                 st.session_state.form_state['passengers'],
                 result.is_round_trip
             )
 
-            driving_time_str = format_time_duration(route_data[3] * multiplier) if route_data[3] else "45 minutes"
-            driving_distance = route_data[4] * multiplier if route_data[4] else (5 if is_derby else result.distance_km)
+            driving_time_seconds = route_data[3] * multiplier if route_data[3] else 2700
+            driving_time_str = format_time_duration(driving_time_seconds)
+            driving_time_diff = format_time_diff(driving_time_seconds - flight_time_seconds)
+            driving_distance = route_data[4] * multiplier if route_data[4] else (15 if is_derby else result.distance_km)
             bus_emissions = route_data[5] * multiplier if route_data[5] else calculate_transport_emissions(
                 'bus',
-                5 if is_derby else result.distance_km,
+                15 if is_derby else result.distance_km,
                 st.session_state.form_state['passengers'],
                 result.is_round_trip
             )
         else:
-            # Default values for derby matches or when no route data exists
             transit_time_str = "30 minutes" if is_derby else "N/A"
-            transit_distance = 5 if is_derby else result.distance_km
+            transit_time_diff = "-"
+            transit_distance = 15 if is_derby else result.distance_km
             rail_emissions = calculate_transport_emissions(
                 'rail',
                 5 if is_derby else result.distance_km,
@@ -375,6 +406,7 @@ def display_transport_comparison(result):
             )
 
             driving_time_str = "45 minutes" if is_derby else "N/A"
+            driving_time_diff = "-"
             driving_distance = 5 if is_derby else result.distance_km
             bus_emissions = calculate_transport_emissions(
                 'bus',
@@ -391,74 +423,77 @@ def display_transport_comparison(result):
         if 'conn' in locals():
             conn.close()
 
-    # Apply styling and create table
     st.markdown("""
-        <style>
-        .styled-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 25px 0;
-            background-color: transparent;
-            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-        }
-        .styled-table thead tr {
-            background-color: transparent;
-            color: #6B7280;
-            text-align: center;
-            font-weight: normal;
-        }
-        .styled-table th,
-        .styled-table td {
-            padding: 12px 15px;
-            text-align: center;
-            border-bottom: 1px solid #1f2937;
-        }
-        .styled-table tbody tr {
-            color: white;
-        }
-        .styled-table tbody tr:last-of-type {
-            border-bottom: none;
-        }
-        .styled-table tbody tr:hover {
-            background-color: #1f2937;
-        }
-        </style>
-    """ + f"""
-    <table class="styled-table">
-        <thead>
-            <tr>
-                <th>Mode</th>
-                <th>Est. Travel Time</th>
-                <th>Distance (km)</th>
-                <th>CO₂ (tons)</th>
-                <th>CO₂ Saved (tons)</th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr>
-                <td>✈️ Air</td>
-                <td>{flight_time_str}</td>
-                <td>{"N/A" if is_derby else f"{result.distance_km:,.1f}"}</td>
-                <td>{flight_emissions:.2f}</td>
-                <td>0.00</td>
-            </tr>
-            <tr>
-                <td>🚂 Rail</td>
-                <td>{transit_time_str}</td>
-                <td>{transit_distance:,.1f}</td>
-                <td>{rail_emissions:.2f}</td>
-                <td>{max(0, flight_emissions - rail_emissions):.2f}</td>
-            </tr>
-            <tr>
-                <td>🚌 Bus</td>
-                <td>{driving_time_str}</td>
-                <td>{driving_distance:,.1f}</td>
-                <td>{bus_emissions:.2f}</td>
-                <td>{max(0, flight_emissions - bus_emissions):.2f}</td>
-            </tr>
-        </tbody>
-    </table>
-    """, unsafe_allow_html=True)
+       <style>
+       .styled-table {
+           width: 100%;
+           border-collapse: collapse;
+           margin: 25px 0;
+           background-color: transparent;
+           font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+       }
+       .styled-table thead tr {
+           background-color: transparent;
+           color: #6B7280;
+           text-align: center;
+           font-weight: normal;
+       }
+       .styled-table th,
+       .styled-table td {
+           padding: 12px 15px;
+           text-align: center;
+           border-bottom: 1px solid #1f2937;
+       }
+       .styled-table tbody tr {
+           color: white;
+       }
+       .styled-table tbody tr:last-of-type {
+           border-bottom: none;
+       }
+       .styled-table tbody tr:hover {
+           background-color: #1f2937;
+       }
+       </style>
+   """ + f"""
+   <table class="styled-table">
+       <thead>
+           <tr>
+               <th>Mode</th>
+               <th>Est. Travel Time</th>
+               <th>Time Impact</th>
+               <th>Distance (km)</th>
+               <th>CO₂ (tons)</th>
+               <th>CO₂ Saved (tons)</th>
+           </tr>
+       </thead>
+       <tbody>
+           <tr>
+               <td>✈️ Air</td>
+               <td>{flight_time_str}</td>
+               <td>-</td>
+               <td>{"N/A" if is_derby else f"{result.distance_km:,.1f}"}</td>
+               <td>{flight_emissions:.2f}</td>
+               <td>0.00</td>
+           </tr>
+           <tr>
+               <td>🚂 Rail</td>
+               <td>{transit_time_str}</td>
+               <td>{transit_time_diff}</td>
+               <td>{transit_distance:,.1f}</td>
+               <td>{rail_emissions:.2f}</td>
+               <td>{max(0, flight_emissions - rail_emissions):.2f}</td>
+           </tr>
+           <tr>
+               <td>🚌 Bus</td>
+               <td>{driving_time_str}</td>
+               <td>{driving_time_diff}</td>
+               <td>{driving_distance:,.1f}</td>
+               <td>{bus_emissions:.2f}</td>
+               <td>{max(0, flight_emissions - bus_emissions):.2f}</td>
+           </tr>
+       </tbody>
+   </table>
+   """, unsafe_allow_html=True)
 def display_carbon_price_analysis(air_emissions, rail_emissions, bus_emissions, away_team, home_team):
     """Display carbon price analysis with proper formatting"""
     st.markdown("### 💰 Carbon Price Analysis")

@@ -268,6 +268,6 @@ def calculate_flight_time(distance_km: float, is_round_trip: bool = False) -> in
 
     # Double for round trip
     if is_round_trip:
-        return int(one_leg_time * 1.50)
+        return int(one_leg_time * 2)
     else:
         return int(one_leg_time)

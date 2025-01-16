@@ -95,6 +95,29 @@ class ICAOEmissionsCalculator:
             Dictionary containing emissions results
         """
         try:
+            if distance_km < 200:  # Increased from 100 to 200
+                if distance_km < 100:
+                    base_fuel_consumption = distance_km * 3.5
+                else:
+                    # Gradual scaling for distances between 100-200km
+                    base_fuel_consumption = distance_km * (3.5 + (distance_km - 100) * 0.02)
+
+                emissions = base_fuel_consumption * 3.16
+                total_emissions = emissions
+
+                return {
+                    "emissions_total_kg": total_emissions,
+                    "emissions_per_pax_kg": total_emissions / passengers,
+                    "fuel_consumption_kg": base_fuel_consumption,
+                    "corrected_distance_km": distance_km,
+                    "route_group": route_group,
+                    "factors_applied": {
+                        "short_distance_calculation": True,
+                        "fuel_factor": 3.5,
+                        "co2_factor": 3.16,
+                        "is_international": is_international
+                    }
+                }
             # 1. Apply GCD correction factor
             corrected_distance = self._apply_gcd_correction(distance_km)
 

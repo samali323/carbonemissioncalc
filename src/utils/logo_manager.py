@@ -1,13 +1,5 @@
-import os
-from typing import Any
-
-import requests
-from pathlib import Path
 import streamlit as st
 from PIL import Image
-from io import BytesIO
-
-from src.data.team_data import get_team_airport
 
 
 # In logo_manager.py
@@ -45,7 +37,6 @@ import requests
 from PIL import Image
 from io import BytesIO
 import streamlit as st
-from src.data.team_data import get_team_airport
 
 
 class FootballLogoManager:
