@@ -72,7 +72,8 @@ SOCIAL_CARBON_COSTS = {
     'synthetic_iqr_low': 97.0,
     'synthetic_iqr_high': 369.0,
     'epa_median': 157.0,
-    'iwg_75th': 52.0
+    'iwg_75th': 52.0,
+    'nber_research': 1367
 }
 SOCIAL_CARBON_COST = SOCIAL_CARBON_COSTS['synthetic_median']
 SOCIAL_COST_MULTIPLIER = SOCIAL_CARBON_COST / CARBON_PRICE

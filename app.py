@@ -640,7 +640,24 @@ def display_carbon_price_analysis(air_emissions, rail_emissions, bus_emissions, 
     </table>
     """
     st.markdown(carbon_html, unsafe_allow_html=True)
-
+    # Add cost type explanations before the social cost table
+    st.markdown("""
+        ### Cost Type Definitions
+        | Type | Description | Value (€/tCO₂) |
+        |------|-------------|----------------|
+        | **Synthetic** | Meta-analysis based cost combining multiple studies | Low: {synthetic_iqr_low:.0f} • Median: {synthetic_median:.0f} • Mean: {synthetic_mean:.0f} • High: {synthetic_iqr_high:.0f} |
+        | **EPA** | U.S. Environmental Protection Agency's estimate | {epa_median:.0f} |
+        | **IWG** | Interagency Working Group's 95th percentile estimate | {iwg_75th:.0f} |
+        | **NBER** |  National Bureau of Economic Research estimate | {nber:.0f} |
+    """.format(
+        synthetic_iqr_low=SOCIAL_CARBON_COSTS['synthetic_iqr_low'],
+        synthetic_median=SOCIAL_CARBON_COSTS['synthetic_median'],
+        synthetic_mean=SOCIAL_CARBON_COSTS['synthetic_mean'],
+        synthetic_iqr_high=SOCIAL_CARBON_COSTS['synthetic_iqr_high'],
+        epa_median=SOCIAL_CARBON_COSTS['epa_median'],
+        iwg_75th=SOCIAL_CARBON_COSTS['iwg_75th'],
+        nber=SOCIAL_CARBON_COSTS['nber_research']
+    ), unsafe_allow_html=True)
     # Social Cost Analysis
     st.markdown("Social Cost Analysis")
 
@@ -682,6 +699,14 @@ def display_carbon_price_analysis(air_emissions, rail_emissions, bus_emissions, 
                 <td></td>
                 <td></td>
             </tr>
+            <tr>
+                <td></td>
+                <td>NBER</td>
+                <td></td>
+                <td>€{air_emissions * SOCIAL_CARBON_COSTS['nber_research']:,.2f}</td>
+                <td></td>
+                <td></td>
+            </tr>
             <!-- Rail -->
             <tr>
                 <td>Rail</td>
@@ -707,6 +732,14 @@ def display_carbon_price_analysis(air_emissions, rail_emissions, bus_emissions, 
                 <td></td>
                 <td></td>
             </tr>
+            <tr>
+                <td></td>
+                <td>NBER</td>
+                <td></td>
+                <td>{"N/A" if rail_emissions is None else f"€{rail_emissions * SOCIAL_CARBON_COSTS['nber_research']:,.2f}"}</td>
+                <td></td>
+                <td></td>
+            </tr>
             <!-- Bus -->
             <tr>
                 <td>Bus</td>
@@ -729,6 +762,14 @@ def display_carbon_price_analysis(air_emissions, rail_emissions, bus_emissions, 
                 <td>IWG</td>
                 <td></td>
                 <td>{"N/A" if bus_emissions is None else f"€{bus_emissions * SOCIAL_CARBON_COSTS['iwg_75th']:,.2f}"}</td>
+                <td></td>
+                <td></td>
+            </tr>
+            <tr>
+                <td></td>
+                <td>NBER</td>
+                <td></td>
+                <td>{"N/A" if bus_emissions is None else f"€{bus_emissions * SOCIAL_CARBON_COSTS['nber_research']:,.2f}"}</td>
                 <td></td>
                 <td></td>
             </tr>
