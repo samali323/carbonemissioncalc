@@ -590,14 +590,14 @@ def display_economic_impacts(result, home_team, away_team):
     home_country = TEAM_COUNTRIES.get(home_team, 'EU')
     away_country = TEAM_COUNTRIES.get(away_team, 'EU')
 
-    # Get flight time from transport comparison
+    # Flight time calculation
     flight_time_seconds = calculate_flight_time(
         distance_km=result.distance_km / (2 if result.is_round_trip else 1),
         is_round_trip=result.is_round_trip
     )
     flight_hours = flight_time_seconds / 3600
 
-    # Get alternative transport emissions
+    # Alternative transport emissions
     rail_emissions = calculate_transport_emissions(
         'rail',
         result.distance_km,
@@ -615,7 +615,7 @@ def display_economic_impacts(result, home_team, away_team):
         away_team
     )
 
-    # Calculate fuel costs (assuming €2.5/L for jet fuel and €7.5/L for SAF)
+    # Fuel costs calculation
     FUEL_PRICE_PER_L = 2.5
     SAF_PRICE_PER_L = 7.5
     conventional_fuel_volume = result.fuel_consumption * 0.98
@@ -624,12 +624,12 @@ def display_economic_impacts(result, home_team, away_team):
     saf_fuel_cost = saf_fuel_volume * SAF_PRICE_PER_L
     total_fuel_cost = conventional_fuel_cost + saf_fuel_cost
 
-    # Calculate carbon costs
+    # Carbon costs calculation
     eu_ets_cost = result.total_emissions * calculator.EU_ETS_PRICE
     national_carbon_tax = result.total_emissions * calculator.CARBON_PRICES.get(home_country, 0)
     total_carbon_cost = eu_ets_cost + national_carbon_tax
 
-    # Calculate social costs
+    # Social costs calculation
     social_costs = {
         'iwg': result.total_emissions * SOCIAL_CARBON_COSTS['iwg_75th'],
         'epa': result.total_emissions * SOCIAL_CARBON_COSTS['epa_median'],
@@ -638,9 +638,9 @@ def display_economic_impacts(result, home_team, away_team):
     }
     avg_social_cost = sum(social_costs.values()) / len(social_costs)
 
-    # Calculate operational costs
+    # Operational costs calculation
     operational_costs = {
-        'base_charter': flight_hours * 32500,  # Base charter rate per hour
+        'base_charter': flight_hours * 32500,
         'landing_fees': 10000,
         'catering': 3500,
         'ground_transport': 2250,
@@ -651,13 +651,13 @@ def display_economic_impacts(result, home_team, away_team):
         total_fuel_cost *= 2
         total_carbon_cost *= 2
 
-    # Calculate total costs
+    # Total costs calculation
     total_charter = sum(operational_costs.values())
     total_operational = total_charter + total_fuel_cost
     total_environmental = total_carbon_cost + avg_social_cost
     total_cost = total_operational + total_environmental
 
-    # Calculate alternative costs and savings
+    # Alternative costs and savings
     alternatives = {
         'empty_leg': {
             'operational': total_operational * 0.25,
@@ -681,22 +681,22 @@ def display_economic_impacts(result, home_team, away_team):
         }
     }
 
-    # Add rail and bus alternatives if available
+    # Add transport alternatives
     if rail_emissions:
         alternatives['rail'] = {
-            'operational': total_operational * 0.3,  # Estimated rail operational cost
+            'operational': total_operational * 0.3,
             'carbon': rail_emissions * calculator.EU_ETS_PRICE,
             'social': rail_emissions * (sum(SOCIAL_CARBON_COSTS.values()) / len(SOCIAL_CARBON_COSTS))
         }
 
     if bus_emissions:
         alternatives['bus'] = {
-            'operational': total_operational * 0.2,  # Estimated bus operational cost
+            'operational': total_operational * 0.2,
             'carbon': bus_emissions * calculator.EU_ETS_PRICE,
             'social': bus_emissions * (sum(SOCIAL_CARBON_COSTS.values()) / len(SOCIAL_CARBON_COSTS))
         }
 
-    # Store all cost components for use in tabs
+    # Store cost components
     cost_data = {
         'operational_costs': operational_costs,
         'fuel': {
@@ -726,261 +726,231 @@ def display_economic_impacts(result, home_team, away_team):
     # Create tabs
     summary_tab, ops_tab, carbon_tab, opt_tab = st.tabs(["Summary", "Operational Costs", "Carbon Costs", "Cost Optimization"])
 
-    # Add compact table styling
+    # Custom CSS for centered tables
     st.markdown("""
     <style>
-        div[data-testid="stDataFrame"] {
-            width: 100% !important;
-        }
-        .stDataFrame {
-            margin: 0.5rem 0;
-        }
-        table th {
-            text-align: center !important;
-        }
-        table td {
-            text-align: center !important;
-        }
-        .stDataFrame > div {
-            text-align: center !important;
-        }
+    .centered-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 1rem 0;
+        font-family: Arial, sans-serif;
+    }
+    .centered-table th, .centered-table td {
+        padding: 12px;
+        text-align: center;
+        border-bottom: 1px solid #ddd;
+    }
+    .centered-table th {
+        background-color: #f8f9fa;
+        font-weight: 600;
+        color: #2c3e50;
+    }
+    .centered-table tr:hover {
+        background-color: #04470a;
+    }
+    .currency {
+        font-family: 'Arial', monospace;
+    }
     </style>
     """, unsafe_allow_html=True)
+
+    def format_currency(value):
+        return f"€{value:,.2f}"
+
+    def create_centered_table(headers, data):
+        table_html = """
+        <table class='centered-table'>
+            <thead><tr>%s</tr></thead>
+            <tbody>%s</tbody>
+        </table>
+        """
+        header_cols = "".join(f"<th>{h}</th>" for h in headers)
+        data_rows = "".join(
+            f"<tr>{''.join(f'<td class=\'currency\'>{d}</td>' for d in row)}</tr>"
+            for row in data
+        )
+        return table_html % (header_cols, data_rows)
 
     with summary_tab:
         st.markdown("### Economic Impact Summary")
 
-        # Summary table with compact formatting
-        summary_df = pd.DataFrame({
-            "Cost Category": ["Operational Costs", "Environmental Impact", "Total Cost"],
-            "Amount (€)": [total_operational, total_environmental, total_cost]
-        })
+        # Economic Impact Table
+        headers = ["Cost Category", "Amount (€)"]
+        data = [
+            ["Operational Costs", format_currency(total_operational)],
+            ["Environmental Impact", format_currency(total_environmental)],
+            ["Total Cost", format_currency(total_cost)]
+        ]
+        st.markdown(create_centered_table(headers, data), unsafe_allow_html=True)
 
-        st.dataframe(
-            summary_df.style.format({"Amount (€)": "€{:,.2f}"})
-            .set_properties(**{'text-align': 'center'}),
-            hide_index=True,
-            use_container_width=True
-        )
-
-
-        # Potential savings with percentage formatting
+        # Potential Savings Table
         st.markdown("### Potential Cost Savings")
         savings_data = []
         for option, costs in alternatives.items():
             total_alt_cost = costs['operational'] + costs['carbon'] + costs['social']
             savings = total_cost - total_alt_cost
             savings_percent = (savings / total_cost) * 100
+            savings_data.append([
+                option.replace('_', ' ').title(),
+                format_currency(total_alt_cost),
+                format_currency(savings),
+                f"{savings_percent:.1f}%"
+            ])
 
-            savings_data.append({
-                "Option": option.replace('_', ' ').title(),
-                "Total Cost": total_alt_cost,
-                "Savings": savings,
-                "Savings %": savings_percent
-            })
-
-        savings_df = pd.DataFrame(savings_data)
-        st.dataframe(
-            savings_df.style.format({
-                "Total Cost": "€{:,.2f}",
-                "Savings": "€{:,.2f}",
-                "Savings %": "{:.1f}%"
-            })
-            .set_properties(**{'text-align': 'center'})
-            .set_table_styles([{
-                'selector': 'th',
-                'props': [('text-align', 'center')]
-            }]),
-            hide_index=True,
-            use_container_width=True
-        )
+        headers = ["Option", "Total Cost", "Savings", "Savings %"]
+        st.markdown(create_centered_table(headers, savings_data), unsafe_allow_html=True)
 
         # Recommendations
         st.markdown("### Recommendations")
         best_option = max(alternatives.items(),
                           key=lambda x: (total_cost - (x[1]['operational'] + x[1]['carbon'] + x[1]['social'])))
         st.markdown(f"""
-        **Most Cost-Effective Option:** {best_option[0].replace('_', ' ').title()}
-        - **Savings:** €{(total_cost - (best_option[1]['operational'] + best_option[1]['carbon'] + best_option[1]['social'])):,.2f}
-        - **Total Cost:** €{(best_option[1]['operational'] + best_option[1]['carbon'] + best_option[1]['social']):,.2f}
-        """)
+        <div style='padding: 15px; background-color: transparent; border-radius: 5px;'>
+            <strong>Most Cost-Effective Option:</strong> {best_option[0].replace('_', ' ').title()}<br>
+            <strong>Savings:</strong> {format_currency(total_cost - (best_option[1]['operational'] + best_option[1]['carbon'] + best_option[1]['social']))}<br>
+            <strong>Total Cost:</strong> {format_currency(best_option[1]['operational'] + best_option[1]['carbon'] + best_option[1]['social'])}
+        </div>
+        """, unsafe_allow_html=True)
 
-        # Environmental impact with compact formatting
-        st.markdown("### Environmental Impact Reduction")
+        # Environmental Impact Table
         if rail_emissions and bus_emissions:
-            env_df = pd.DataFrame({
-                "Transport Mode": ["Air", "Rail", "Bus"],
-                "CO₂ Emissions (tons)": [result.total_emissions, rail_emissions, bus_emissions],
-                "Reduction %": [
-                    0,
-                    ((result.total_emissions - rail_emissions) / result.total_emissions * 100),
-                    ((result.total_emissions - bus_emissions) / result.total_emissions * 100)
-                ]
-            })
-
-        st.markdown("### Environmental Impact Reduction")
-        if rail_emissions and bus_emissions:
-            st.dataframe(
-                env_df.style.format({
-                    "CO₂ Emissions (tons)": "{:,.2f}",
-                    "Reduction %": "{:.1f}%"
-                })
-                .set_properties(**{'text-align': 'center'})
-                .set_table_styles([{
-                    'selector': 'th',
-                    'props': [('text-align', 'center')]
-                }]),
-                hide_index=True,
-                use_container_width=True
-            )
-    #--------------------------------------------------------------------------------------------------------------------------------------------
+            st.markdown("### Environmental Impact Reduction")
+            headers = ["Transport Mode", "CO₂ Emissions (tons)", "Reduction %"]
+            data = [
+                ["Air", f"{result.total_emissions:,.2f}", "0.0%"],
+                ["Rail", f"{rail_emissions:,.2f}", f"{((result.total_emissions - rail_emissions)/result.total_emissions*100):.1f}%"],
+                ["Bus", f"{bus_emissions:,.2f}", f"{((result.total_emissions - bus_emissions)/result.total_emissions*100):.1f}%"]
+            ]
+            st.markdown(create_centered_table(headers, data), unsafe_allow_html=True)
 
     with ops_tab:
-        # Create two columns for the layout
         col1, col2 = st.columns(2)
-
         with col1:
             st.markdown("#### Base Charter Costs")
-            st.write(f"Flight Duration: {flight_hours:.1f} hours")
-            st.write(f"Charter Rate: €32,500/hour")
-            st.write(f"Base Charter Cost: €{operational_costs['base_charter']:,.2f}")
-            st.write(f"Landing Fees: €{operational_costs['landing_fees']:,.2f}")
-            st.write(f"Catering: €{operational_costs['catering']:,.2f}")
-            st.write(f"Ground Transport: €{operational_costs['ground_transport']:,.2f}")
+            st.markdown(f"""
+            <div style='padding: 15px; background-color: transparent; border-radius: 5px;'>
+                Flight Duration: {flight_hours:.1f} hours<br>
+                Charter Rate: €32,500/hour<br>
+                Base Charter Cost: {format_currency(operational_costs['base_charter'])}<br>
+                Landing Fees: {format_currency(operational_costs['landing_fees'])}<br>
+                Catering: {format_currency(operational_costs['catering'])}<br>
+                Ground Transport: {format_currency(operational_costs['ground_transport'])}
+            </div>
+            """, unsafe_allow_html=True)
 
         with col2:
             st.markdown("#### Fuel Breakdown")
-            st.write("Conventional Jet A-1 (98%)")
-            st.write(f"Volume: {cost_data['fuel']['conventional']['volume']:.0f}L")
-            st.write(f"Cost: €{cost_data['fuel']['conventional']['cost']:,.2f}")
-            st.write("SAF (2%)")
-            st.write(f"Volume: {cost_data['fuel']['saf']['volume']:.0f}L")
-            st.write(f"Cost: €{cost_data['fuel']['saf']['cost']:,.2f}")
+            st.markdown(f"""
+            <div style='padding: 15px; background-color: transparent; border-radius: 5px;'>
+                Conventional Jet A-1 (98%)<br>
+                Volume: {cost_data['fuel']['conventional']['volume']:.0f}L<br>
+                Cost: {format_currency(cost_data['fuel']['conventional']['cost'])}<br><br>
+                SAF (2%)<br>
+                Volume: {cost_data['fuel']['saf']['volume']:.0f}L<br>
+                Cost: {format_currency(cost_data['fuel']['saf']['cost'])}
+            </div>
+            """, unsafe_allow_html=True)
 
-        # Total costs section
         st.markdown("---")
         st.markdown("#### Total Operational Costs")
-        st.write(f"Charter Costs: €{total_charter:,.2f}")
-        st.write(f"Fuel Costs: €{cost_data['fuel']['total']:,.2f}")
-        st.markdown(f"**Total: €{cost_data['totals']['operational']:,.2f}**")
+        st.markdown(f"""
+        <div style='padding: 15px; background-color: transparent; border-radius: 5px;'>
+            Charter Costs: {format_currency(total_charter)}<br>
+            Fuel Costs: {format_currency(cost_data['fuel']['total'])}<br>
+            <strong>Total: {format_currency(cost_data['totals']['operational'])}</strong>
+        </div>
+        """, unsafe_allow_html=True)
 
     with carbon_tab:
         st.markdown("### Carbon Price Analysis")
-
-        # Carbon Price Components
         st.markdown("#### Carbon Price Components")
-        st.write(f"EU ETS Cost (€{calculator.EU_ETS_PRICE:.2f}/ton): €{cost_data['carbon']['eu_ets']:,.2f}")
-        st.write(f"National Carbon Tax (€{calculator.CARBON_PRICES.get(home_country, 0):.2f}/ton): €{cost_data['carbon']['national']:,.2f}")
+        st.markdown(f"""
+        <div style='padding: 15px; background-color: transparent; border-radius: 5px;'>
+            EU ETS Cost (€{calculator.EU_ETS_PRICE:.2f}/ton): {format_currency(cost_data['carbon']['eu_ets'])}<br>
+            National Carbon Tax (€{calculator.CARBON_PRICES.get(home_country, 0):.2f}/ton): {format_currency(cost_data['carbon']['national'])}
+        </div>
+        """, unsafe_allow_html=True)
 
-        # Calculation Details
         st.markdown("#### Calculation Details")
-        st.write(f"Emissions: {result.total_emissions:.2f} tons CO₂")
-        st.write(f"Total Carbon Cost: €{cost_data['carbon']['total']:,.2f}")
+        st.markdown(f"""
+        <div style='padding: 15px; background-color: transparent; border-radius: 5px;'>
+            Emissions: {result.total_emissions:.2f} tons CO₂<br>
+            Total Carbon Cost: {format_currency(cost_data['carbon']['total'])}
+        </div>
+        """, unsafe_allow_html=True)
 
-        # Social Cost of Carbon
         st.markdown("#### Social Cost of Carbon")
-        st.write(f"IWG (95th percentile): €{social_costs['iwg']:,.2f}")
-        st.write(f"EPA Median: €{social_costs['epa']:,.2f}")
-        st.write(f"Synthetic Median: €{social_costs['synthetic']:,.2f}")
-        st.write(f"NBER Research: €{social_costs['nber']:,.2f}")
-        st.markdown(f"**Average Social Cost: €{avg_social_cost:,.2f}**")
+        st.markdown(f"""
+        <div style='padding: 15px; background-color: transparent; border-radius: 5px;'>
+            IWG (95th percentile): {format_currency(social_costs['iwg'])}<br>
+            EPA Median: {format_currency(social_costs['epa'])}<br>
+            Synthetic Median: {format_currency(social_costs['synthetic'])}<br>
+            NBER Research: {format_currency(social_costs['nber'])}<br>
+            <strong>Average Social Cost: {format_currency(avg_social_cost)}</strong>
+        </div>
+        """, unsafe_allow_html=True)
 
-        # Total Environmental Impact
         st.markdown("---")
         st.markdown("#### Total Environmental Impact Cost")
-        st.write(f"Carbon Market Cost: €{cost_data['carbon']['total']:,.2f}")
-        st.write(f"Social Cost: €{avg_social_cost:,.2f}")
-        st.markdown(f"**Total Environmental Cost: €{cost_data['totals']['environmental']:,.2f}**")
-    #--------------------------------------------------------------------------------------------------------------------------------------------
+        st.markdown(f"""
+        <div style='padding: 15px; background-color: transparent; border-radius: 5px;'>
+            Carbon Market Cost: {format_currency(cost_data['carbon']['total'])}<br>
+            Social Cost: {format_currency(avg_social_cost)}<br>
+            <strong>Total Environmental Cost: {format_currency(cost_data['totals']['environmental'])}</strong>
+        </div>
+        """, unsafe_allow_html=True)
+
     with opt_tab:
         st.markdown("### Cost Optimization Options")
 
-        # Empty Leg Flight
-        st.markdown("#### Empty Leg Flight")
-        empty_op_cost = alternatives['empty_leg']['operational']
-        empty_carbon_cost = alternatives['empty_leg']['carbon']
-        empty_social_cost = alternatives['empty_leg']['social']
-        empty_total = empty_op_cost + empty_carbon_cost + empty_social_cost
-        savings = total_cost - empty_total
+        def format_option(title, costs, description):
+            total_cost = sum(costs.values())
+            savings = total_cost - total_cost
+            return f"""
+            <div style='padding: 15px; background-color: transparent; border-radius: 5px; margin-bottom: 1rem;'>
+                <strong>{title}</strong><br>
+                Operational Cost: {format_currency(costs['operational'])}<br>
+                Carbon Cost: {format_currency(costs['carbon'])}<br>
+                Social Cost: {format_currency(costs['social'])}<br>
+                <strong>Total Cost: {format_currency(total_cost)}</strong><br>
+                <strong>Savings: {format_currency(savings)} ({(savings/total_cost)*100:.1f}%)</strong><br>
+                <em>{description}</em>
+            </div>
+            """
 
-        st.write(f"Operational Cost: €{empty_op_cost:,.2f}")
-        st.write(f"Carbon Cost: €{empty_carbon_cost:,.2f}")
-        st.write(f"Social Cost: €{empty_social_cost:,.2f}")
-        st.write(f"Total Cost: €{empty_total:,.2f}")
-        st.write(f"**Potential Savings: €{savings:,.2f} ({(savings/total_cost)*100:.1f}%)**")
-        st.write("*75% discount on operational costs as aircraft would fly empty otherwise.*")
+        st.markdown(format_option(
+            "Empty Leg Flight",
+            alternatives['empty_leg'],
+            "75% discount on operational costs as aircraft would fly empty otherwise"
+        ), unsafe_allow_html=True)
 
-        st.markdown("---")
+        st.markdown(format_option(
+            "Regional Airport Option",
+            alternatives['regional_airport'],
+            "30% reduction in landing fees using smaller airports"
+        ), unsafe_allow_html=True)
 
-        # Regional Airport Option
-        st.markdown("#### Regional Airport Option")
-        regional_op_cost = alternatives['regional_airport']['operational']
-        regional_carbon_cost = alternatives['regional_airport']['carbon']
-        regional_social_cost = alternatives['regional_airport']['social']
-        regional_total = regional_op_cost + regional_carbon_cost + regional_social_cost
-        savings = total_cost - regional_total
+        st.markdown(format_option(
+            "Bulk Rate Booking",
+            alternatives['bulk_rate'],
+            "15% discount through seasonal booking arrangements"
+        ), unsafe_allow_html=True)
 
-        st.write(f"Operational Cost: €{regional_op_cost:,.2f}")
-        st.write(f"Carbon Cost: €{regional_carbon_cost:,.2f}")
-        st.write(f"Social Cost: €{regional_social_cost:,.2f}")
-        st.write(f"Total Cost: €{regional_total:,.2f}")
-        st.write(f"**Potential Savings: €{savings:,.2f} ({(savings/total_cost)*100:.1f}%)**")
-        st.write("*30% reduction in landing fees using smaller airports.*")
-
-        st.markdown("---")
-
-        # Bulk Rate Booking
-        st.markdown("#### Bulk Rate Booking")
-        bulk_op_cost = alternatives['bulk_rate']['operational']
-        bulk_carbon_cost = alternatives['bulk_rate']['carbon']
-        bulk_social_cost = alternatives['bulk_rate']['social']
-        bulk_total = bulk_op_cost + bulk_carbon_cost + bulk_social_cost
-        savings = total_cost - bulk_total
-
-        st.write(f"Operational Cost: €{bulk_op_cost:,.2f}")
-        st.write(f"Carbon Cost: €{bulk_carbon_cost:,.2f}")
-        st.write(f"Social Cost: €{bulk_social_cost:,.2f}")
-        st.write(f"Total Cost: €{bulk_total:,.2f}")
-        st.write(f"**Potential Savings: €{savings:,.2f} ({(savings/total_cost)*100:.1f}%)**")
-        st.write("*15% discount through seasonal booking arrangements.*")
-
-        st.markdown("---")
-
-        # Alternative Transport Options
         if rail_emissions or bus_emissions:
             st.markdown("#### Alternative Transport Options")
-
             if rail_emissions:
-                st.markdown("##### Rail Transport")
-                rail_op_cost = alternatives['rail']['operational']
-                rail_carbon_cost = alternatives['rail']['carbon']
-                rail_social_cost = alternatives['rail']['social']
-                rail_total = rail_op_cost + rail_carbon_cost + rail_social_cost
-                savings = total_cost - rail_total
-
-                st.write(f"Operational Cost: €{rail_op_cost:,.2f}")
-                st.write(f"Carbon Cost: €{rail_carbon_cost:,.2f}")
-                st.write(f"Social Cost: €{rail_social_cost:,.2f}")
-                st.write(f"Total Cost: €{rail_total:,.2f}")
-                st.write(f"**Potential Savings: €{savings:,.2f} ({(savings/total_cost)*100:.1f}%)**")
-                st.write(f"*Reduces emissions by {((result.total_emissions - rail_emissions) / result.total_emissions * 100):,.1f}%*")
-
-                st.markdown("---")
+                st.markdown(format_option(
+                    "Rail Transport",
+                    alternatives['rail'],
+                    f"Reduces emissions by {((result.total_emissions - rail_emissions)/result.total_emissions*100):.1f}%"
+                ), unsafe_allow_html=True)
 
             if bus_emissions:
-                st.markdown("##### Bus Transport")
-                bus_op_cost = alternatives['bus']['operational']
-                bus_carbon_cost = alternatives['bus']['carbon']
-                bus_social_cost = alternatives['bus']['social']
-                bus_total = bus_op_cost + bus_carbon_cost + bus_social_cost
-                savings = total_cost - bus_total
-
-                st.write(f"Operational Cost: €{bus_op_cost:,.2f}")
-                st.write(f"Carbon Cost: €{bus_carbon_cost:,.2f}")
-                st.write(f"Social Cost: €{bus_social_cost:,.2f}")
-                st.write(f"Total Cost: €{bus_total:,.2f}")
-                st.write(f"**Potential Savings: €{savings:,.2f} ({(savings/total_cost)*100:.1f}%)**")
-                st.write(f"*Reduces emissions by {((result.total_emissions - bus_emissions) / result.total_emissions * 100):,.1f}%*")
+                st.markdown(format_option(
+                    "Bus Transport",
+                    alternatives['bus'],
+                    f"Reduces emissions by {((result.total_emissions - bus_emissions)/result.total_emissions*100):.1f}%"
+                ), unsafe_allow_html=True)
 
 def display_carbon_price_analysis(air_emissions, rail_emissions, bus_emissions, away_team, home_team):
     """Display carbon price analysis with proper formatting"""
