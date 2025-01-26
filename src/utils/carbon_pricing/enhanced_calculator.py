@@ -34,7 +34,7 @@ class EnhancedCarbonPricingCalculator:
             'AL': 12.19,  # Albania
             'AT': 45.00,  # Austria
             'DK': 26.13,  # Denmark
-            'EE': 2.00,   # Estonia
+            'EE': 2.00,  # Estonia
             'FI': 93.02,  # Finland
             'FR': 44.60,  # France
             'DE': 45.00,  # Germany
@@ -42,17 +42,17 @@ class EnhancedCarbonPricingCalculator:
             'IS': 33.95,  # Iceland
             'IE': 56.00,  # Ireland
             'LV': 15.00,  # Latvia
-            'LI': 122.87, # Liechtenstein
+            'LI': 122.87,  # Liechtenstein
             'LU': 46.43,  # Luxembourg
             'NL': 66.50,  # Netherlands
             'NO': 99.01,  # Norway
-            'PL': 0.09,   # Poland
+            'PL': 0.09,  # Poland
             'PT': 56.25,  # Portugal
             'SI': 17.30,  # Slovenia
             'ES': 15.00,  # Spain
-            'SE': 118.35, # Sweden
-            'CH': 122.87, # Switzerland
-            'UA': 0.72,   # Ukraine
+            'SE': 118.35,  # Sweden
+            'CH': 122.87,  # Switzerland
+            'UA': 0.72,  # Ukraine
             'GB': 21.04,  # United Kingdom
         }
 
@@ -165,6 +165,7 @@ class EnhancedCarbonPricingCalculator:
             )
 
         return results
+
     def _generate_forecast(self, emissions: float, fuel_usage: float, flight_type: str) -> dict:
         """Generate cost forecasts for next three years"""
         forecast = {}
@@ -184,8 +185,9 @@ class EnhancedCarbonPricingCalculator:
             forecast[year] = {
                 'eu_ets_price': ets_price,
                 'saf_requirement': saf_requirement,
-                'conventional_fuel_cost': conv_fuel * self.FUEL_PARAMS['conventional']['price'] * 1.05**(year - base_year),
-                'saf_fuel_cost': saf_fuel * self.FUEL_PARAMS['saf']['price'] * 1.03**(year - base_year),
+                'conventional_fuel_cost': conv_fuel * self.FUEL_PARAMS['conventional']['price'] * 1.05 ** (
+                            year - base_year),
+                'saf_fuel_cost': saf_fuel * self.FUEL_PARAMS['saf']['price'] * 1.03 ** (year - base_year),
                 'carbon_cost': emissions * ets_price if flight_type in ['intra_eea', 'eea_outbound'] else 0
             }
 
@@ -213,7 +215,7 @@ class EnhancedCarbonPricingCalculator:
             explanations.append(f"National Carbon Tax ({origin}): €{origin_tax}/ton CO2")
 
         explanations.append(
-            f"SAF Blend Requirement: {self.FUEL_PARAMS['saf']['blend_requirement']*100}%"
+            f"SAF Blend Requirement: {self.FUEL_PARAMS['saf']['blend_requirement'] * 100}%"
         )
 
         return "\n".join(explanations)

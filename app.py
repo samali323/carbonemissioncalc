@@ -589,32 +589,75 @@ def display_carbon_price_analysis(air_emissions, rail_emissions, bus_emissions, 
     """Display carbon price analysis with proper formatting"""
     st.markdown("### 💰 Carbon Price Analysis")
 
-    # Get carbon price and display header
-    carbon_price = get_carbon_price(away_team, home_team)
+    # Get carbon prices
+    calculator = EnhancedCarbonPricingCalculator()
+    home_country = TEAM_COUNTRIES.get(home_team, 'EU')
     away_country = TEAM_COUNTRIES.get(away_team, 'EU')
-    st.markdown(f"**Carbon Price ({away_country}): €{carbon_price:.2f}/tCO₂**")
+    flight_type = calculator.classify_flight(home_country, away_country)
 
-    # 1. Carbon Price Costs Table
-    st.markdown("#### Carbon Price Costs")
+    # Calculate EU ETS and national carbon costs
+    eu_ets_cost = 0
+    national_cost = 0
 
+    # For air transport
+    if flight_type in ['intra_eea', 'eea_outbound']:
+        eu_ets_cost = air_emissions * calculator.EU_ETS_PRICE
+
+    origin_tax = calculator.CARBON_PRICES.get(home_country, 0)
+    if origin_tax > 0:
+        national_cost = air_emissions * origin_tax
+
+    # Total carbon cost for air
+    total_air_cost = eu_ets_cost + national_cost
+
+    # Calculate costs for rail and bus (using EU ETS price for intra-EU journeys)
+    rail_cost = rail_emissions * calculator.EU_ETS_PRICE if rail_emissions else None
+    bus_cost = bus_emissions * calculator.EU_ETS_PRICE if bus_emissions else None
+
+    # Display total and breakdown
+    st.markdown(f"**Total Carbon Price for Air Transport: €{total_air_cost:.2f}**")
+    st.markdown("#### Carbon Price Components")
+
+    if eu_ets_cost > 0:
+        st.markdown(f"• EU ETS Cost (€{calculator.EU_ETS_PRICE}/ton): €{eu_ets_cost:.2f}")
+    if national_cost > 0:
+        st.markdown(f"• National Carbon Tax (€{origin_tax}/ton): €{national_cost:.2f}")
+
+    # Detailed explanation
+    st.markdown("#### Carbon Price Calculation Details")
+    st.markdown(f"""
+    Air transport calculation:
+    - Emissions: {air_emissions:.2f} tons CO₂
+    - Applicable carbon price: €{origin_tax}/ton
+    - Total cost: {air_emissions:.2f} × €{origin_tax} = €{total_air_cost:.2f}
+    """)
+
+    # Carbon Price Costs Table
+    st.markdown("#### Carbon Price Costs by Transport Mode")
     carbon_data = {
         "Mode": ["Air", "Rail", "Bus"],
+        "Emissions (tons CO₂)": [air_emissions, rail_emissions, bus_emissions],
+        "Applicable Price (€/ton)": [
+            origin_tax if national_cost > 0 else calculator.EU_ETS_PRICE,
+            calculator.EU_ETS_PRICE,
+            calculator.EU_ETS_PRICE
+        ],
         "Carbon Cost (€)": [
-            air_emissions * carbon_price,
-            rail_emissions * carbon_price if rail_emissions else None,
-            bus_emissions * carbon_price if bus_emissions else None
+            total_air_cost,
+            rail_cost,
+            bus_cost
         ]
     }
 
     carbon_df = pd.DataFrame(carbon_data)
     st.markdown(carbon_df.style.format({
+        "Emissions (tons CO₂)": "{:.2f}",
+        "Applicable Price (€/ton)": "€{:.2f}",
         "Carbon Cost (€)": lambda x: f"€{x:,.2f}" if pd.notnull(x) else "N/A"
     }).hide().to_html(), unsafe_allow_html=True)
-
     # 2. Social Cost of Carbon Table
     st.markdown("#### Social Cost of Carbon")
 
-    # Define cost sources with their metadata
     cost_sources = [
         ('IWG', 'iwg_75th', "Interagency Working Group 95th percentile estimate"),
         ('EPA', 'epa_median', "U.S. Environmental Protection Agency estimate"),
@@ -622,7 +665,6 @@ def display_carbon_price_analysis(air_emissions, rail_emissions, bus_emissions, 
         ('NBER', 'nber_research', "National Bureau of Economic Research estimate")
     ]
 
-    # Sort by median value (using pre-sorted order from definitions)
     social_data = []
     for source, key, description in cost_sources:
         social_data.append({
@@ -639,9 +681,7 @@ def display_carbon_price_analysis(air_emissions, rail_emissions, bus_emissions, 
         "Bus": lambda x: f"€{x:,.2f}" if pd.notnull(x) else "N/A"
     }).hide().to_html(index=False), unsafe_allow_html=True)
 
-    # 3. Cost Type Definitions (now matches social cost order)
     st.markdown("#### Cost Type Definitions")
-
     definitions_data = {
         "Cost Source": [f"{source} ({desc})" for source, _, desc in cost_sources],
         "Median Values (€/tCO₂)": [f"€{SOCIAL_CARBON_COSTS[key]:.0f}" for _, key, _ in cost_sources]
@@ -749,7 +789,7 @@ def display_economic_impacts(result, home_team, away_team):
         diff_cols = st.columns(2)
         with diff_cols[0]:
             st.metric("Current SAF Premium", f"€{cost_difference:,.2f}",
-                      delta=f"{(cost_difference/conv['cost'])*100:.1f}%")
+                      delta=f"{(cost_difference / conv['cost']) * 100:.1f}%")
         with diff_cols[1]:
             st.metric("Potential Emissions Saved (with 100% SAF)",
                       f"{emissions_saved:,.2f} tons",
@@ -783,6 +823,7 @@ def display_economic_impacts(result, home_team, away_team):
             }
             formatted_df = forecast_data[display_cols.keys()].rename(columns=display_cols)
             st.dataframe(formatted_df.style.format("€{:,.2f}"))
+
 
 def calculate_and_display():
     """Calculate and display emissions results"""
