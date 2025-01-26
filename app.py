@@ -11,6 +11,7 @@ from src.utils.calculations import (
     calculate_equivalencies,
     calculate_flight_time, format_time_duration, get_carbon_price
 )
+from src.utils.carbon_pricing.enhanced_calculator import EnhancedCarbonPricingCalculator
 from src.utils.logo_manager import FootballLogoManager
 
 # Initialize calculator
@@ -235,6 +236,15 @@ def display_results(result):
             away_team=st.session_state.form_state['away_team'],
             home_team=st.session_state.form_state['home_team']
         )
+
+    # Economic Impact Analysis as a separate top-level expander
+    with st.expander("💸 Economic Impact Analysis", expanded=False):
+        display_economic_impacts(
+            result=result,
+            home_team=st.session_state.form_state['home_team'],
+            away_team=st.session_state.form_state['away_team']
+        )
+
 
 def display_environmental_impact(impact):
     """Display environmental impact with consistent formatting"""
@@ -574,6 +584,7 @@ def display_transport_comparison(result):
            """, unsafe_allow_html=True)
     return rail_emissions, bus_emissions
 
+
 def display_carbon_price_analysis(air_emissions, rail_emissions, bus_emissions, away_team, home_team):
     """Display carbon price analysis with proper formatting"""
     st.markdown("### 💰 Carbon Price Analysis")
@@ -664,6 +675,115 @@ def display_carbon_price_analysis(air_emissions, rail_emissions, bus_emissions, 
     }
     </style>
     """, unsafe_allow_html=True)
+
+
+def display_economic_impacts(result, home_team, away_team):
+    """Display economic impact analysis for the flight."""
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("### Flight Details")
+        st.metric("Distance", f"{result.distance_km:,.0f} km")
+        st.metric("Total Emissions", f"{result.total_emissions:,.2f} tons CO2")
+        st.metric("Fuel Consumption", f"{result.fuel_consumption:,.0f} L")
+
+    with col2:
+        st.markdown("### Carbon Pricing Schemes")
+        calculator = EnhancedCarbonPricingCalculator()
+        home_country = TEAM_COUNTRIES.get(home_team, 'EU')
+        away_country = TEAM_COUNTRIES.get(away_team, 'EU')
+
+        pricing_explanation = calculator.get_pricing_explanation(home_country, away_country)
+        st.markdown(pricing_explanation)
+
+    # Calculate costs
+    costs = calculator.calculate_carbon_costs(
+        origin=home_country,
+        destination=away_country,
+        emissions=result.total_emissions,  # Using ICAO emissions
+        fuel_usage=result.fuel_consumption,
+        include_forecast=True
+    )
+
+    # Create tabs for different analyses
+    costs_tab, fuel_tab, forecast_tab = st.tabs(["Current Costs", "Fuel Analysis", "Cost Forecast"])
+
+    with costs_tab:
+        st.markdown("### Current Costs")
+        cost_cols = st.columns(4)
+        with cost_cols[0]:
+            st.metric("EU ETS Cost", f"€{costs['current_costs']['eu_ets']:,.2f}")
+        with cost_cols[1]:
+            st.metric("National Tax", f"€{costs['current_costs']['national']:,.2f}")
+        with cost_cols[2]:
+            st.metric("Fuel Cost", f"€{costs['current_costs']['fuel']:,.2f}")
+        with cost_cols[3]:
+            st.metric("Total Cost", f"€{costs['current_costs']['total']:,.2f}")
+
+    with fuel_tab:
+        st.markdown("### Fuel Cost Analysis")
+        st.markdown("""
+        Emissions are distributed proportionally between conventional fuel and SAF 
+        based on the fuel mix ratio (98% conventional, 2% SAF)
+        """)
+
+        fuel_cols = st.columns(2)
+        with fuel_cols[0]:
+            st.markdown("#### Conventional Jet A-1 (98%)")
+            conv = costs['fuel_breakdown']['conventional']
+            st.metric("Volume", f"{conv['volume']:,.0f} L")
+            st.metric("Cost", f"€{conv['cost']:,.2f}")
+            st.metric("Proportional Emissions", f"{conv['emissions']:,.2f} tons")
+
+        with fuel_cols[1]:
+            st.markdown("#### Sustainable Aviation Fuel (2%)")
+            saf = costs['fuel_breakdown']['saf']
+            st.metric("Volume", f"{saf['volume']:,.0f} L")
+            st.metric("Cost", f"€{saf['cost']:,.2f}")
+            st.metric("Proportional Emissions", f"{saf['emissions']:,.2f} tons")
+
+        # Calculate and display cost differences
+        cost_difference = saf['cost'] - conv['cost']
+        emissions_saved = conv['emissions'] * (0.75)  # SAF reduces emissions by ~75%
+        st.markdown("#### Cost-Benefit Analysis")
+        diff_cols = st.columns(2)
+        with diff_cols[0]:
+            st.metric("Current SAF Premium", f"€{cost_difference:,.2f}",
+                      delta=f"{(cost_difference/conv['cost'])*100:.1f}%")
+        with diff_cols[1]:
+            st.metric("Potential Emissions Saved (with 100% SAF)",
+                      f"{emissions_saved:,.2f} tons",
+                      delta=f"-{75:.0f}%")
+
+        st.markdown("""
+        *Note: The 'Potential Emissions Saved' shows the theoretical reduction if using 100% SAF,
+        which typically reduces emissions by ~75% compared to conventional fuel.*
+        """)
+
+    with forecast_tab:
+        if costs['forecast']:
+            st.markdown("### Cost Forecast")
+            forecast_data = pd.DataFrame(costs['forecast']).T
+
+            st.markdown("#### Total Cost Trend")
+            st.line_chart(forecast_data[['total_cost']])
+
+            st.markdown("#### Cost Components")
+            components = ['eu_ets_price', 'conventional_fuel_cost', 'saf_fuel_cost', 'carbon_cost']
+            component_data = forecast_data[components]
+            st.line_chart(component_data)
+
+            display_cols = {
+                'eu_ets_price': 'EU ETS Price',
+                'saf_requirement': 'SAF Requirement',
+                'conventional_fuel_cost': 'Conventional Fuel Cost',
+                'saf_fuel_cost': 'SAF Cost',
+                'carbon_cost': 'Carbon Cost',
+                'total_cost': 'Total Cost'
+            }
+            formatted_df = forecast_data[display_cols.keys()].rename(columns=display_cols)
+            st.dataframe(formatted_df.style.format("€{:,.2f}"))
+
 def calculate_and_display():
     """Calculate and display emissions results"""
     try:
