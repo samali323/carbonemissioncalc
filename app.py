@@ -1,5 +1,6 @@
 import sqlite3
 
+import pandas as pd
 import streamlit as st
 
 from src.config.constants import SOCIAL_CARBON_COSTS
@@ -577,208 +578,92 @@ def display_carbon_price_analysis(air_emissions, rail_emissions, bus_emissions, 
     """Display carbon price analysis with proper formatting"""
     st.markdown("### 💰 Carbon Price Analysis")
 
+    # Get carbon price and display header
     carbon_price = get_carbon_price(away_team, home_team)
     away_country = TEAM_COUNTRIES.get(away_team, 'EU')
+    st.markdown(f"**Carbon Price ({away_country}): €{carbon_price:.2f}/tCO₂**")
 
-    st.markdown(f"Carbon Price ({away_country}): €{carbon_price:.2f}/tCO₂")
+    # 1. Carbon Price Costs Table
+    st.markdown("#### Carbon Price Costs")
 
-    # CSS for consistent table styling - updated to maintain width
+    carbon_data = {
+        "Mode": ["Air", "Rail", "Bus"],
+        "Carbon Cost (€)": [
+            air_emissions * carbon_price,
+            rail_emissions * carbon_price if rail_emissions else None,
+            bus_emissions * carbon_price if bus_emissions else None
+        ]
+    }
+
+    carbon_df = pd.DataFrame(carbon_data)
+    st.markdown(carbon_df.style.format({
+        "Carbon Cost (€)": lambda x: f"€{x:,.2f}" if pd.notnull(x) else "N/A"
+    }).hide().to_html(), unsafe_allow_html=True)
+
+    # 2. Social Cost of Carbon Table
+    st.markdown("#### Social Cost of Carbon")
+
+    # Define cost sources with their metadata
+    cost_sources = [
+        ('IWG', 'iwg_75th', "Interagency Working Group 95th percentile estimate"),
+        ('EPA', 'epa_median', "U.S. Environmental Protection Agency estimate"),
+        ('Synthetic', 'synthetic_median', "Meta-analysis combining multiple studies"),
+        ('NBER', 'nber_research', "National Bureau of Economic Research estimate")
+    ]
+
+    # Sort by median value (using pre-sorted order from definitions)
+    social_data = []
+    for source, key, description in cost_sources:
+        social_data.append({
+            "Cost Source": source,
+            "Air": air_emissions * SOCIAL_CARBON_COSTS[key],
+            "Rail": rail_emissions * SOCIAL_CARBON_COSTS[key] if rail_emissions else None,
+            "Bus": bus_emissions * SOCIAL_CARBON_COSTS[key] if bus_emissions else None
+        })
+
+    social_df = pd.DataFrame(social_data)
+    st.markdown(social_df.style.format({
+        "Air": "€{:,.2f}",
+        "Rail": lambda x: f"€{x:,.2f}" if pd.notnull(x) else "N/A",
+        "Bus": lambda x: f"€{x:,.2f}" if pd.notnull(x) else "N/A"
+    }).hide().to_html(index=False), unsafe_allow_html=True)
+
+    # 3. Cost Type Definitions (now matches social cost order)
+    st.markdown("#### Cost Type Definitions")
+
+    definitions_data = {
+        "Cost Source": [f"{source} ({desc})" for source, _, desc in cost_sources],
+        "Median Values (€/tCO₂)": [f"€{SOCIAL_CARBON_COSTS[key]:.0f}" for _, key, _ in cost_sources]
+    }
+
+    definitions_df = pd.DataFrame(definitions_data)
+    st.markdown(definitions_df.style.hide(axis="index").to_html(), unsafe_allow_html=True)
+
+    # Table styling
     st.markdown("""
-        <style>
-        .cost-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 1rem 0;
-            background-color: #0e1117;
-            color: #ffffff;
-            table-layout: fixed;  /* Added for consistent column width */
-        }
-        .cost-table th {
-            color: #6B7280;
-            font-weight: normal;
-            text-align: center !important;
-            padding: 12px;
-            border-bottom: 1px solid #1f2937;
-            background-color: #0e1117;
-            width: 50%;  /* Set width for columns */
-        }
-        .cost-table td {
-            padding: 12px;
-            text-align: center !important;
-            border-bottom: 1px solid #1f2937;
-            background-color: transparent;
-        }
-        .cost-table tr:hover td {
-            background-color: #1f2937;
-        }
-        </style>
+    <style>
+    table {
+        width: 100% !important;
+        margin: 1rem 0;
+        border-collapse: collapse;
+    }
+    th {
+        text-align: center !important;
+        background-color: #1f2937;
+        color: white;
+        padding: 8px;
+        border: 1px solid #2d3748;
+    }
+    td {
+        text-align: center !important;
+        padding: 8px;
+        border: 1px solid #2d3748;
+    }
+    tr:nth-child(even) {
+        background-color: #0e1117;
+    }
+    </style>
     """, unsafe_allow_html=True)
-
-    # Only show N/A if emissions is None
-    carbon_html = f"""
-    <table class="cost-table">
-        <thead>
-            <tr>
-                <th>Mode</th>
-                <th>Carbon Cost (€)</th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr>
-                <td>Air</td>
-                <td>{(air_emissions * carbon_price):.2f}</td>
-            </tr>
-            <tr>
-                <td>Rail</td>
-                <td>{"N/A" if rail_emissions is None else f"{(rail_emissions * carbon_price):.2f}"}</td>
-            </tr>
-            <tr>
-                <td>Bus</td>
-                <td>{"N/A" if bus_emissions is None else f"{(bus_emissions * carbon_price):.2f}"}</td>
-            </tr>
-        </tbody>
-    </table>
-    """
-    st.markdown(carbon_html, unsafe_allow_html=True)
-    # Add cost type explanations before the social cost table
-    st.markdown("""
-        ### Cost Type Definitions
-        | Type | Description | Value (€/tCO₂) |
-        |------|-------------|----------------|
-        | **Synthetic** | Meta-analysis based cost combining multiple studies | Low: {synthetic_iqr_low:.0f} • Median: {synthetic_median:.0f} • Mean: {synthetic_mean:.0f} • High: {synthetic_iqr_high:.0f} |
-        | **EPA** | U.S. Environmental Protection Agency's estimate | {epa_median:.0f} |
-        | **IWG** | Interagency Working Group's 95th percentile estimate | {iwg_75th:.0f} |
-        | **NBER** |  National Bureau of Economic Research estimate | {nber:.0f} |
-    """.format(
-        synthetic_iqr_low=SOCIAL_CARBON_COSTS['synthetic_iqr_low'],
-        synthetic_median=SOCIAL_CARBON_COSTS['synthetic_median'],
-        synthetic_mean=SOCIAL_CARBON_COSTS['synthetic_mean'],
-        synthetic_iqr_high=SOCIAL_CARBON_COSTS['synthetic_iqr_high'],
-        epa_median=SOCIAL_CARBON_COSTS['epa_median'],
-        iwg_75th=SOCIAL_CARBON_COSTS['iwg_75th'],
-        nber=SOCIAL_CARBON_COSTS['nber_research']
-    ), unsafe_allow_html=True)
-    # Social Cost Analysis
-    st.markdown("Social Cost Analysis")
-
-    social_html = f"""
-    <table class="cost-table">
-        <thead>
-            <tr>
-                <th>Mode</th>
-                <th>Cost Type</th>
-                <th>Low</th>
-                <th>Median</th>
-                <th>Mean</th>
-                <th>High</th>
-            </tr>
-        </thead>
-        <tbody>
-            <!-- Air -->
-            <tr>
-                <td>Air</td>
-                <td>Synthetic</td>
-                <td>€{air_emissions * SOCIAL_CARBON_COSTS['synthetic_iqr_low']:,.2f}</td>
-                <td>€{air_emissions * SOCIAL_CARBON_COSTS['synthetic_median']:,.2f}</td>
-                <td>€{air_emissions * SOCIAL_CARBON_COSTS['synthetic_mean']:,.2f}</td>
-                <td>€{air_emissions * SOCIAL_CARBON_COSTS['synthetic_iqr_high']:,.2f}</td>
-            </tr>
-            <tr>
-                <td></td>
-                <td>EPA</td>
-                <td></td>
-                <td>€{air_emissions * SOCIAL_CARBON_COSTS['epa_median']:,.2f}</td>
-                <td></td>
-                <td></td>
-            </tr>
-            <tr>
-                <td></td>
-                <td>IWG</td>
-                <td></td>
-                <td>€{air_emissions * SOCIAL_CARBON_COSTS['iwg_75th']:,.2f}</td>
-                <td></td>
-                <td></td>
-            </tr>
-            <tr>
-                <td></td>
-                <td>NBER</td>
-                <td></td>
-                <td>€{air_emissions * SOCIAL_CARBON_COSTS['nber_research']:,.2f}</td>
-                <td></td>
-                <td></td>
-            </tr>
-            <!-- Rail -->
-            <tr>
-                <td>Rail</td>
-                <td>Synthetic</td>
-                <td>{"N/A" if rail_emissions is None else f"€{rail_emissions * SOCIAL_CARBON_COSTS['synthetic_iqr_low']:,.2f}"}</td>
-                <td>{"N/A" if rail_emissions is None else f"€{rail_emissions * SOCIAL_CARBON_COSTS['synthetic_median']:,.2f}"}</td>
-                <td>{"N/A" if rail_emissions is None else f"€{rail_emissions * SOCIAL_CARBON_COSTS['synthetic_mean']:,.2f}"}</td>
-                <td>{"N/A" if rail_emissions is None else f"€{rail_emissions * SOCIAL_CARBON_COSTS['synthetic_iqr_high']:,.2f}"}</td>
-            </tr>
-            <tr>
-                <td></td>
-                <td>EPA</td>
-                <td></td>
-                <td>{"N/A" if rail_emissions is None else f"€{rail_emissions * SOCIAL_CARBON_COSTS['epa_median']:,.2f}"}</td>
-                <td></td>
-                <td></td>
-            </tr>
-            <tr>
-                <td></td>
-                <td>IWG</td>
-                <td></td>
-                <td>{"N/A" if rail_emissions is None else f"€{rail_emissions * SOCIAL_CARBON_COSTS['iwg_75th']:,.2f}"}</td>
-                <td></td>
-                <td></td>
-            </tr>
-            <tr>
-                <td></td>
-                <td>NBER</td>
-                <td></td>
-                <td>{"N/A" if rail_emissions is None else f"€{rail_emissions * SOCIAL_CARBON_COSTS['nber_research']:,.2f}"}</td>
-                <td></td>
-                <td></td>
-            </tr>
-            <!-- Bus -->
-            <tr>
-                <td>Bus</td>
-                <td>Synthetic</td>
-                <td>{"N/A" if bus_emissions is None else f"€{bus_emissions * SOCIAL_CARBON_COSTS['synthetic_iqr_low']:,.2f}"}</td>
-                <td>{"N/A" if bus_emissions is None else f"€{bus_emissions * SOCIAL_CARBON_COSTS['synthetic_median']:,.2f}"}</td>
-                <td>{"N/A" if bus_emissions is None else f"€{bus_emissions * SOCIAL_CARBON_COSTS['synthetic_mean']:,.2f}"}</td>
-                <td>{"N/A" if bus_emissions is None else f"€{bus_emissions * SOCIAL_CARBON_COSTS['synthetic_iqr_high']:,.2f}"}</td>
-            </tr>
-            <tr>
-                <td></td>
-                <td>EPA</td>
-                <td></td>
-                <td>{"N/A" if bus_emissions is None else f"€{bus_emissions * SOCIAL_CARBON_COSTS['epa_median']:,.2f}"}</td>
-                <td></td>
-                <td></td>
-            </tr>
-            <tr>
-                <td></td>
-                <td>IWG</td>
-                <td></td>
-                <td>{"N/A" if bus_emissions is None else f"€{bus_emissions * SOCIAL_CARBON_COSTS['iwg_75th']:,.2f}"}</td>
-                <td></td>
-                <td></td>
-            </tr>
-            <tr>
-                <td></td>
-                <td>NBER</td>
-                <td></td>
-                <td>{"N/A" if bus_emissions is None else f"€{bus_emissions * SOCIAL_CARBON_COSTS['nber_research']:,.2f}"}</td>
-                <td></td>
-                <td></td>
-            </tr>
-        </tbody>
-    </table>
-    """
-    st.markdown(social_html, unsafe_allow_html=True)
-
-
 def calculate_and_display():
     """Calculate and display emissions results"""
     try:
