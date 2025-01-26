@@ -726,23 +726,46 @@ def display_economic_impacts(result, home_team, away_team):
     # Create tabs
     summary_tab, ops_tab, carbon_tab, opt_tab = st.tabs(["Summary", "Operational Costs", "Carbon Costs", "Cost Optimization"])
 
+    # Add compact table styling
+    st.markdown("""
+    <style>
+        div[data-testid="stDataFrame"] {
+            width: 100% !important;
+        }
+        .stDataFrame {
+            margin: 0.5rem 0;
+        }
+        table th {
+            text-align: center !important;
+        }
+        table td {
+            text-align: center !important;
+        }
+        .stDataFrame > div {
+            text-align: center !important;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+
     with summary_tab:
         st.markdown("### Economic Impact Summary")
 
-        # Create summary table
-        summary_data = {
+        # Summary table with compact formatting
+        summary_df = pd.DataFrame({
             "Cost Category": ["Operational Costs", "Environmental Impact", "Total Cost"],
-            "Amount (€)": [
-                f"{total_operational:,.2f}",
-                f"{total_environmental:,.2f}",
-                f"{total_cost:,.2f}"
-            ]
-        }
-        st.table(pd.DataFrame(summary_data))
+            "Amount (€)": [total_operational, total_environmental, total_cost]
+        })
 
-        # Show potential savings
+        st.dataframe(
+            summary_df.style.format({"Amount (€)": "€{:,.2f}"})
+            .set_properties(**{'text-align': 'center'}),
+            hide_index=True,
+            use_container_width=True
+        )
+
+
+        # Potential savings with percentage formatting
         st.markdown("### Potential Cost Savings")
-
         savings_data = []
         for option, costs in alternatives.items():
             total_alt_cost = costs['operational'] + costs['carbon'] + costs['social']
@@ -751,37 +774,65 @@ def display_economic_impacts(result, home_team, away_team):
 
             savings_data.append({
                 "Option": option.replace('_', ' ').title(),
-                "Total Cost (€)": f"{total_alt_cost:,.2f}",
-                "Savings (€)": f"{savings:,.2f}",
-                "Savings (%)": f"{savings_percent:,.1f}%"
+                "Total Cost": total_alt_cost,
+                "Savings": savings,
+                "Savings %": savings_percent
             })
 
-        st.table(pd.DataFrame(savings_data))
+        savings_df = pd.DataFrame(savings_data)
+        st.dataframe(
+            savings_df.style.format({
+                "Total Cost": "€{:,.2f}",
+                "Savings": "€{:,.2f}",
+                "Savings %": "{:.1f}%"
+            })
+            .set_properties(**{'text-align': 'center'})
+            .set_table_styles([{
+                'selector': 'th',
+                'props': [('text-align', 'center')]
+            }]),
+            hide_index=True,
+            use_container_width=True
+        )
 
-        # Display recommendations
+        # Recommendations
         st.markdown("### Recommendations")
         best_option = max(alternatives.items(),
-                          key=lambda x: total_cost - (x[1]['operational'] + x[1]['carbon'] + x[1]['social']))
-        st.write(f"**Most Cost-Effective Option:** {best_option[0].replace('_', ' ').title()}")
+                          key=lambda x: (total_cost - (x[1]['operational'] + x[1]['carbon'] + x[1]['social'])))
+        st.markdown(f"""
+        **Most Cost-Effective Option:** {best_option[0].replace('_', ' ').title()}
+        - **Savings:** €{(total_cost - (best_option[1]['operational'] + best_option[1]['carbon'] + best_option[1]['social'])):,.2f}
+        - **Total Cost:** €{(best_option[1]['operational'] + best_option[1]['carbon'] + best_option[1]['social']):,.2f}
+        """)
 
-        # Show environmental impact reduction
+        # Environmental impact with compact formatting
         st.markdown("### Environmental Impact Reduction")
         if rail_emissions and bus_emissions:
-            env_data = {
+            env_df = pd.DataFrame({
                 "Transport Mode": ["Air", "Rail", "Bus"],
-                "CO₂ Emissions (tons)": [
-                    f"{result.total_emissions:,.2f}",
-                    f"{rail_emissions:,.2f}",
-                    f"{bus_emissions:,.2f}"
-                ],
-                "Reduction (%)": [
-                    "0%",
-                    f"{((result.total_emissions - rail_emissions) / result.total_emissions * 100):,.1f}%",
-                    f"{((result.total_emissions - bus_emissions) / result.total_emissions * 100):,.1f}%"
+                "CO₂ Emissions (tons)": [result.total_emissions, rail_emissions, bus_emissions],
+                "Reduction %": [
+                    0,
+                    ((result.total_emissions - rail_emissions) / result.total_emissions * 100),
+                    ((result.total_emissions - bus_emissions) / result.total_emissions * 100)
                 ]
-            }
-            st.table(pd.DataFrame(env_data))
+            })
 
+        st.markdown("### Environmental Impact Reduction")
+        if rail_emissions and bus_emissions:
+            st.dataframe(
+                env_df.style.format({
+                    "CO₂ Emissions (tons)": "{:,.2f}",
+                    "Reduction %": "{:.1f}%"
+                })
+                .set_properties(**{'text-align': 'center'})
+                .set_table_styles([{
+                    'selector': 'th',
+                    'props': [('text-align', 'center')]
+                }]),
+                hide_index=True,
+                use_container_width=True
+            )
     #--------------------------------------------------------------------------------------------------------------------------------------------
 
     with ops_tab:
