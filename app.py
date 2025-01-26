@@ -227,22 +227,21 @@ def display_results(result):
             st.markdown(f"• {impact['propane_cylinders']:,.0f} Propane cylinders for BBQ")
             st.markdown(f"• {impact['oil_barrels']:.2f} Barrels of oil")
 
-    # Cost Analysis (collapsible)
-    with st.expander("💰 Cost Analysis", expanded=False):
-        display_carbon_price_analysis(
-            air_emissions=result.total_emissions,
-            rail_emissions=rail_emissions,
-            bus_emissions=bus_emissions,
-            away_team=st.session_state.form_state['away_team'],
-            home_team=st.session_state.form_state['home_team']
-        )
-
     # Economic Impact Analysis as a separate top-level expander
     with st.expander("💸 Economic Impact Analysis", expanded=False):
         display_economic_impacts(
             result=result,
             home_team=st.session_state.form_state['home_team'],
             away_team=st.session_state.form_state['away_team']
+        )
+        # Cost Analysis (collapsible)
+    with st.expander("💰 Carbon Price Breakdown", expanded=False):
+        display_carbon_price_analysis(
+            air_emissions=result.total_emissions,
+            rail_emissions=rail_emissions,
+            bus_emissions=bus_emissions,
+            away_team=st.session_state.form_state['away_team'],
+            home_team=st.session_state.form_state['home_team']
         )
 
 
@@ -585,6 +584,167 @@ def display_transport_comparison(result):
     return rail_emissions, bus_emissions
 
 
+
+def display_economic_impacts(result, home_team, away_team):
+    """Display economic impact analysis with operational costs, carbon costs, and optimization options."""
+    calculator = EnhancedCarbonPricingCalculator()
+    home_country = TEAM_COUNTRIES.get(home_team, 'EU')
+    away_country = TEAM_COUNTRIES.get(away_team, 'EU')
+
+    # Get flight time from transport comparison
+    flight_time_seconds = calculate_flight_time(
+        distance_km=result.distance_km / (2 if result.is_round_trip else 1),
+        is_round_trip=result.is_round_trip
+    )
+    flight_hours = flight_time_seconds / 3600  # Convert to hours
+
+    # Calculate carbon costs
+    costs = calculator.calculate_carbon_costs(
+        origin=home_country,
+        destination=away_country,
+        emissions=result.total_emissions,
+        fuel_usage=result.fuel_consumption,
+        include_forecast=True
+    )
+
+    # Calculate social costs
+    social_costs = {
+        'iwg': result.total_emissions * SOCIAL_CARBON_COSTS['iwg_75th'],
+        'epa': result.total_emissions * SOCIAL_CARBON_COSTS['epa_median'],
+        'synthetic': result.total_emissions * SOCIAL_CARBON_COSTS['synthetic_median'],
+        'nber': result.total_emissions * SOCIAL_CARBON_COSTS['nber_research']
+    }
+    avg_social_cost = sum(social_costs.values()) / len(social_costs)
+
+    # Calculate operational costs
+    operational_costs = {
+        'base_charter': flight_hours * 32500,  # Base charter rate per hour
+        'landing_fees': 10000,
+        'catering': 3500,
+        'ground_transport': 2250,
+    }
+
+    if result.is_round_trip:
+        operational_costs = {k: v * 2 for k, v in operational_costs.items()}
+
+    # Create tabs
+    ops_tab, carbon_tab, opt_tab = st.tabs(["Operational Costs", "Carbon Costs", "Cost Optimization"])
+
+    with ops_tab:
+        # Create two columns for the layout
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.markdown("#### Base Charter Costs")
+            st.write(f"Flight Duration: {flight_hours:.1f} hours")
+            st.write(f"Charter Rate: €32,500/hour")
+            st.write(f"Base Charter Cost: €{operational_costs['base_charter']:,.2f}")
+            st.write(f"Landing Fees: €{operational_costs['landing_fees']:,.2f}")
+            st.write(f"Catering: €{operational_costs['catering']:,.2f}")
+            st.write(f"Ground Transport: €{operational_costs['ground_transport']:,.2f}")
+
+        with col2:
+            st.markdown("#### Fuel Breakdown")
+            st.write("Conventional Jet A-1 (98%)")
+            st.write(f"Volume: {costs['fuel_breakdown']['conventional']['volume']:.0f}L")
+            st.write(f"Cost: €{costs['fuel_breakdown']['conventional']['cost']:,.2f}")
+            st.write("SAF (2%)")
+            st.write(f"Volume: {costs['fuel_breakdown']['saf']['volume']:.0f}L")
+            st.write(f"Cost: €{costs['fuel_breakdown']['saf']['cost']:,.2f}")
+
+        # Total costs section
+        st.markdown("---")
+        st.markdown("#### Total Operational Costs")
+        total_charter = sum(operational_costs.values())
+        total_fuel = costs['current_costs']['fuel']
+        st.write(f"Charter Costs: €{total_charter:,.2f}")
+        st.write(f"Fuel Costs: €{total_fuel:,.2f}")
+        st.markdown(f"**Total: €{total_charter + total_fuel:,.2f}**")
+    with carbon_tab:
+        st.markdown("### Carbon Price Analysis")
+
+        # Carbon Price Components
+        st.markdown("#### Carbon Price Components")
+        st.write(f"EU ETS Cost (€{calculator.EU_ETS_PRICE:.2f}/ton): €{costs['current_costs']['eu_ets']:,.2f}")
+        st.write(f"National Carbon Tax (€{calculator.CARBON_PRICES.get(home_country, 0):.2f}/ton): €{costs['current_costs']['national']:,.2f}")
+
+        # Calculation Details
+        st.markdown("#### Calculation Details")
+        st.write(f"Emissions: {result.total_emissions:.2f} tons CO₂")
+        st.write(f"Total Carbon Cost: €{costs['current_costs']['total']:,.2f}")
+
+        # Social Cost of Carbon
+        st.markdown("#### Social Cost of Carbon")
+        st.write(f"IWG (95th percentile): €{social_costs['iwg']:,.2f}")
+        st.write(f"EPA Median: €{social_costs['epa']:,.2f}")
+        st.write(f"Synthetic Median: €{social_costs['synthetic']:,.2f}")
+        st.write(f"NBER Research: €{social_costs['nber']:,.2f}")
+        st.markdown(f"**Average Social Cost: €{avg_social_cost:,.2f}**")
+
+        # Total Environmental Impact
+        st.markdown("---")
+        st.markdown("#### Total Environmental Impact Cost")
+        total_env_cost = costs['current_costs']['total'] + avg_social_cost
+        st.write(f"Carbon Market Cost: €{costs['current_costs']['total']:,.2f}")
+        st.write(f"Social Cost: €{avg_social_cost:,.2f}")
+        st.markdown(f"**Total Environmental Cost: €{total_env_cost:,.2f}**")
+    with opt_tab:
+        total_operational = sum(operational_costs.values()) + costs['current_costs']['fuel']
+
+        st.markdown("### Cost Optimization Options")
+
+        # Empty Leg Flight
+        st.markdown("#### Empty Leg Flight")
+        empty_op_cost = total_operational * 0.25
+        empty_carbon_cost = costs['current_costs']['total']
+        st.write(f"Operational Cost: €{empty_op_cost:,.2f}")
+        st.write(f"Carbon Cost: €{empty_carbon_cost:,.2f}")
+        st.write(f"Total Cost: €{empty_op_cost + empty_carbon_cost:,.2f}")
+        st.write("*75% discount on operational costs as aircraft would fly empty otherwise. Carbon costs remain the same.*")
+
+        st.markdown("---")
+
+        # Regional Airport Option
+        st.markdown("#### Regional Airport Option")
+        regional_op_cost = total_operational - (operational_costs['landing_fees'] * 0.3)
+        regional_carbon_cost = costs['current_costs']['total']
+        st.write(f"Operational Cost: €{regional_op_cost:,.2f}")
+        st.write(f"Carbon Cost: €{regional_carbon_cost:,.2f}")
+        st.write(f"Total Cost: €{regional_op_cost + regional_carbon_cost:,.2f}")
+        st.write("*30% reduction in landing fees using smaller airports.*")
+
+        st.markdown("---")
+
+        # Bulk Rate Booking
+        st.markdown("#### Bulk Rate Booking")
+        bulk_op_cost = total_operational * 0.85
+        bulk_carbon_cost = costs['current_costs']['total']
+        st.write(f"Operational Cost: €{bulk_op_cost:,.2f}")
+        st.write(f"Carbon Cost: €{bulk_carbon_cost:,.2f}")
+        st.write(f"Total Cost: €{bulk_op_cost + bulk_carbon_cost:,.2f}")
+        st.write("*15% discount through seasonal booking arrangements.*")
+
+        st.markdown("---")
+
+        # Split Charter
+        st.markdown("#### Split Charter (2 Aircraft)")
+        split_op_cost = total_operational * 1.1
+        split_carbon_cost = costs['current_costs']['total'] * 1.2
+        st.write(f"Operational Cost: €{split_op_cost:,.2f}")
+        st.write(f"Carbon Cost: €{split_carbon_cost:,.2f}")
+        st.write(f"Total Cost: €{split_op_cost + split_carbon_cost:,.2f}")
+        st.write("*Higher costs due to using two smaller aircraft, but offers more flexibility.*")
+
+        if result.distance_km < 2000:
+            st.markdown("---")
+            st.markdown("#### Commercial First Class Option")
+            commercial_op_cost = total_operational * 0.4
+            commercial_carbon_cost = costs['current_costs']['total'] * 0.3
+            st.write(f"Operational Cost: €{commercial_op_cost:,.2f}")
+            st.write(f"Carbon Cost: €{commercial_carbon_cost:,.2f}")
+            st.write(f"Total Cost: €{commercial_op_cost + commercial_carbon_cost:,.2f}")
+            st.write("*Available on commercial routes with exclusive check-in and flexible booking.*")
+
 def display_carbon_price_analysis(air_emissions, rail_emissions, bus_emissions, away_team, home_team):
     """Display carbon price analysis with proper formatting"""
     st.markdown("### 💰 Carbon Price Analysis")
@@ -715,115 +875,6 @@ def display_carbon_price_analysis(air_emissions, rail_emissions, bus_emissions, 
     }
     </style>
     """, unsafe_allow_html=True)
-
-
-def display_economic_impacts(result, home_team, away_team):
-    """Display economic impact analysis for the flight."""
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.markdown("### Flight Details")
-        st.metric("Distance", f"{result.distance_km:,.0f} km")
-        st.metric("Total Emissions", f"{result.total_emissions:,.2f} tons CO2")
-        st.metric("Fuel Consumption", f"{result.fuel_consumption:,.0f} L")
-
-    with col2:
-        st.markdown("### Carbon Pricing Schemes")
-        calculator = EnhancedCarbonPricingCalculator()
-        home_country = TEAM_COUNTRIES.get(home_team, 'EU')
-        away_country = TEAM_COUNTRIES.get(away_team, 'EU')
-
-        pricing_explanation = calculator.get_pricing_explanation(home_country, away_country)
-        st.markdown(pricing_explanation)
-
-    # Calculate costs
-    costs = calculator.calculate_carbon_costs(
-        origin=home_country,
-        destination=away_country,
-        emissions=result.total_emissions,  # Using ICAO emissions
-        fuel_usage=result.fuel_consumption,
-        include_forecast=True
-    )
-
-    # Create tabs for different analyses
-    costs_tab, fuel_tab, forecast_tab = st.tabs(["Current Costs", "Fuel Analysis", "Cost Forecast"])
-
-    with costs_tab:
-        st.markdown("### Current Costs")
-        cost_cols = st.columns(4)
-        with cost_cols[0]:
-            st.metric("EU ETS Cost", f"€{costs['current_costs']['eu_ets']:,.2f}")
-        with cost_cols[1]:
-            st.metric("National Tax", f"€{costs['current_costs']['national']:,.2f}")
-        with cost_cols[2]:
-            st.metric("Fuel Cost", f"€{costs['current_costs']['fuel']:,.2f}")
-        with cost_cols[3]:
-            st.metric("Total Cost", f"€{costs['current_costs']['total']:,.2f}")
-
-    with fuel_tab:
-        st.markdown("### Fuel Cost Analysis")
-        st.markdown("""
-        Emissions are distributed proportionally between conventional fuel and SAF 
-        based on the fuel mix ratio (98% conventional, 2% SAF)
-        """)
-
-        fuel_cols = st.columns(2)
-        with fuel_cols[0]:
-            st.markdown("#### Conventional Jet A-1 (98%)")
-            conv = costs['fuel_breakdown']['conventional']
-            st.metric("Volume", f"{conv['volume']:,.0f} L")
-            st.metric("Cost", f"€{conv['cost']:,.2f}")
-            st.metric("Proportional Emissions", f"{conv['emissions']:,.2f} tons")
-
-        with fuel_cols[1]:
-            st.markdown("#### Sustainable Aviation Fuel (2%)")
-            saf = costs['fuel_breakdown']['saf']
-            st.metric("Volume", f"{saf['volume']:,.0f} L")
-            st.metric("Cost", f"€{saf['cost']:,.2f}")
-            st.metric("Proportional Emissions", f"{saf['emissions']:,.2f} tons")
-
-        # Calculate and display cost differences
-        cost_difference = saf['cost'] - conv['cost']
-        emissions_saved = conv['emissions'] * (0.75)  # SAF reduces emissions by ~75%
-        st.markdown("#### Cost-Benefit Analysis")
-        diff_cols = st.columns(2)
-        with diff_cols[0]:
-            st.metric("Current SAF Premium", f"€{cost_difference:,.2f}",
-                      delta=f"{(cost_difference / conv['cost']) * 100:.1f}%")
-        with diff_cols[1]:
-            st.metric("Potential Emissions Saved (with 100% SAF)",
-                      f"{emissions_saved:,.2f} tons",
-                      delta=f"-{75:.0f}%")
-
-        st.markdown("""
-        *Note: The 'Potential Emissions Saved' shows the theoretical reduction if using 100% SAF,
-        which typically reduces emissions by ~75% compared to conventional fuel.*
-        """)
-
-    with forecast_tab:
-        if costs['forecast']:
-            st.markdown("### Cost Forecast")
-            forecast_data = pd.DataFrame(costs['forecast']).T
-
-            st.markdown("#### Total Cost Trend")
-            st.line_chart(forecast_data[['total_cost']])
-
-            st.markdown("#### Cost Components")
-            components = ['eu_ets_price', 'conventional_fuel_cost', 'saf_fuel_cost', 'carbon_cost']
-            component_data = forecast_data[components]
-            st.line_chart(component_data)
-
-            display_cols = {
-                'eu_ets_price': 'EU ETS Price',
-                'saf_requirement': 'SAF Requirement',
-                'conventional_fuel_cost': 'Conventional Fuel Cost',
-                'saf_fuel_cost': 'SAF Cost',
-                'carbon_cost': 'Carbon Cost',
-                'total_cost': 'Total Cost'
-            }
-            formatted_df = forecast_data[display_cols.keys()].rename(columns=display_cols)
-            st.dataframe(formatted_df.style.format("€{:,.2f}"))
-
 
 def calculate_and_display():
     """Calculate and display emissions results"""
