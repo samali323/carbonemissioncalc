@@ -1,7 +1,11 @@
 import sqlite3
 
 import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
 import streamlit as st
+from plotly.subplots import make_subplots
+from pygments.lexers import go
 
 from src.config.constants import SOCIAL_CARBON_COSTS
 from src.data.team_data import get_all_teams, get_team_airport, get_airport_coordinates, TEAM_COUNTRIES
@@ -9,7 +13,7 @@ from src.models.emissions import EmissionsCalculator
 from src.utils.calculations import (
     calculate_transport_emissions,
     calculate_equivalencies,
-    calculate_flight_time, format_time_duration, get_carbon_price
+    calculate_flight_time, format_time_duration
 )
 from src.utils.carbon_pricing.enhanced_calculator import EnhancedCarbonPricingCalculator
 from src.utils.logo_manager import FootballLogoManager
@@ -724,7 +728,7 @@ def display_economic_impacts(result, home_team, away_team):
     }
 
     # Create tabs
-    summary_tab, ops_tab, carbon_tab, opt_tab = st.tabs(["Summary", "Operational Costs", "Carbon Costs", "Cost Optimization"])
+    summary_tab, ops_tab, carbon_tab, opt_tab, viz_tab = st.tabs(["Summary", "Operational Costs", "Carbon Costs", "Cost Optimization", "Visualizations"])
 
     # Custom CSS for centered tables
     st.markdown("""
@@ -952,6 +956,219 @@ def display_economic_impacts(result, home_team, away_team):
                     f"Reduces emissions by {((result.total_emissions - bus_emissions)/result.total_emissions*100):.1f}%"
                 ), unsafe_allow_html=True)
 
+    with viz_tab:
+        st.markdown("### 📈 Future Cost Projections")
+
+        # Generate projection data
+        projection_years = 10
+        base_year = 2024
+        years = list(range(base_year, base_year + projection_years))
+
+        # Combined fuel and carbon price projections
+        combined_df = pd.DataFrame({
+            'Year': years,
+            'Conventional Fuel': [round(2.5 * (1.05)**i, 2) for i in range(projection_years)],
+            'Sustainable Aviation Fuel': [round(7.5 * (0.97)**i, 2) for i in range(projection_years)],
+            'EU ETS': [round(calculator.EU_ETS_PRICE * (1.08)**i, 2) for i in range(projection_years)],
+            'National Carbon Tax': [round(calculator.CARBON_PRICES.get(home_country, 0) * (1.06)**i, 2) for i in range(projection_years)]
+        })
+
+        # Check if national carbon tax is 0
+        if calculator.CARBON_PRICES.get(home_country, 0) == 0:
+            st.info(f"""
+            📝 **Note on National Carbon Tax:**  
+            {home_team} is based in {home_country}, which currently does not have a national carbon tax 
+            or has not implemented specific aviation carbon pricing beyond the EU ETS scheme.
+            """)
+
+        # Create figure with adjusted y-axis range
+        fig = px.line(combined_df, x='Year',
+                      y=['Conventional Fuel', 'Sustainable Aviation Fuel', 'EU ETS', 'National Carbon Tax'],
+                      title='Combined Price Projections')
+
+        # Update layout with adjusted y-axis range
+        max_fuel_price = max(max(combined_df['Conventional Fuel']), max(combined_df['Sustainable Aviation Fuel']))
+        max_carbon_price = max(max(combined_df['EU ETS']), max(combined_df['National Carbon Tax']))
+
+        fig.update_layout(
+            template='plotly_dark',
+            hovermode='x unified',
+            xaxis=dict(tickmode='array', tickvals=years),
+            yaxis=dict(
+                title='Price (€)',
+                range=[0, max(max_fuel_price, max_carbon_price) * 1.1]  # Set range with 10% padding
+            ),
+            legend_title='Price Component',
+            legend=dict(
+                yanchor="top",
+                y=0.99,
+                xanchor="left",
+                x=0.01
+            )
+        )
+
+        # Update line styles
+        for i in range(len(fig.data)):
+            if i >= 2:  # Make carbon price lines dashed
+                fig.data[i].line.dash = 'dash'
+
+        st.plotly_chart(fig, use_container_width=True)
+        # Cumulative Cost Impact
+        st.markdown("### 📊 Cumulative Cost Impact")
+
+        # Calculate cumulative costs with rounded values
+        operational_costs = [round(total_operational * (1.04)**i) for i in range(projection_years)]
+        carbon_costs = [round(total_carbon_cost * (1.08)**i) for i in range(projection_years)]
+        fuel_costs = [round(total_fuel_cost * (1.05)**i) for i in range(projection_years)]
+
+        cumulative_df = pd.DataFrame({
+            'Year': years,
+            'Operational Costs': operational_costs,
+            'Carbon Costs': carbon_costs,
+            'Fuel Costs': fuel_costs
+        })
+
+        fig_cumulative = px.area(
+            cumulative_df,
+            x='Year',
+            y=['Operational Costs', 'Carbon Costs', 'Fuel Costs'],
+            title='Projected Cumulative Costs',
+            template='plotly_dark'
+        )
+        fig_cumulative.update_layout(
+            yaxis_title='Cost (€)',
+            hovermode='x unified',
+            showlegend=True,
+            legend_title_text='Cost Component',
+            xaxis=dict(tickmode='array', tickvals=years)
+        )
+        st.plotly_chart(fig_cumulative, use_container_width=True)
+
+        # Add Total Cost Projection
+        total_costs = [round(sum(x)) for x in zip(operational_costs, carbon_costs, fuel_costs)]
+        total_df = pd.DataFrame({
+            'Year': years,
+            'Total Cost': total_costs
+        })
+
+        fig_total = px.line(
+            total_df,
+            x='Year',
+            y='Total Cost',
+            title='Total Cost Projection',
+            template='plotly_dark'
+        )
+        fig_total.update_layout(
+            yaxis_title='Total Cost (€)',
+            hovermode='x unified',
+            xaxis=dict(tickmode='array', tickvals=years)
+        )
+        st.plotly_chart(fig_total, use_container_width=True)
+
+        # Key Assumptions
+        st.markdown("""
+        #### Key Assumptions (10-Year Outlook):
+        - Conventional fuel prices increase by 5% annually
+        - SAF prices decrease by 3% annually due to scaling effects
+        - EU ETS carbon prices increase by 8% annually
+        - National carbon prices increase by 6% annually
+        - Operational costs increase by 4% annually
+        
+        These long-term projections help visualize the potential future cost impacts and can assist in strategic planning and sustainability initiatives over the next decade.
+        """)
+
+        # Enhanced scenario analysis section
+        st.markdown("### 🔄 Scenario Analysis")
+
+        st.markdown("""
+        This analysis explores three possible future scenarios to help understand potential cost variations:
+        
+        ##### 🎯 Base Case Scenario
+        - Follows current market trends
+        - Conventional fuel: 5% annual increase
+        - Carbon prices: 8% annual increase
+        - Operational costs: 4% annual increase
+        
+        ##### 📈 High Growth Scenario
+        - Assumes accelerated price increases due to:
+            - Stricter environmental regulations
+            - Higher energy demand
+            - Increased operational costs
+        - Conventional fuel: 8% annual increase
+        - Carbon prices: 12% annual increase
+        - Operational costs: 6% annual increase
+        
+        ##### 📉 Low Growth Scenario
+        - Assumes slower price increases due to:
+            - Technological improvements
+            - Market efficiency gains
+            - Stabilized energy prices
+        - Conventional fuel: 3% annual increase
+        - Carbon prices: 5% annual increase
+        - Operational costs: 2% annual increase
+        """)
+
+        scenarios = {
+            'Base Case': {
+                'fuel_increase': 0.05,
+                'carbon_increase': 0.08,
+                'operational_increase': 0.04
+            },
+            'High Growth': {
+                'fuel_increase': 0.08,
+                'carbon_increase': 0.12,
+                'operational_increase': 0.06
+            },
+            'Low Growth': {
+                'fuel_increase': 0.03,
+                'carbon_increase': 0.05,
+                'operational_increase': 0.02
+            }
+        }
+
+        scenario_data = []
+        for scenario, rates in scenarios.items():
+            for year in range(projection_years):
+                total_cost = round(
+                    total_operational * (1 + rates['operational_increase'])**year +
+                    total_carbon_cost * (1 + rates['carbon_increase'])**year +
+                    total_fuel_cost * (1 + rates['fuel_increase'])**year
+                )
+                scenario_data.append({
+                    'Year': base_year + year,
+                    'Scenario': scenario,
+                    'Total Cost': total_cost
+                })
+
+        scenario_df = pd.DataFrame(scenario_data)
+
+        fig_scenarios = px.line(
+            scenario_df,
+            x='Year',
+            y='Total Cost',
+            color='Scenario',
+            title='Cost Scenarios Comparison',
+            template='plotly_dark'
+        )
+        fig_scenarios.update_layout(
+            yaxis_title='Total Cost (€)',
+            hovermode='x unified',
+            xaxis=dict(tickmode='array', tickvals=years)
+        )
+        st.plotly_chart(fig_scenarios, use_container_width=True)
+
+        # Add impact analysis after scenarios
+        st.markdown("""
+        #### 💡 Strategic Implications
+        
+        The scenario analysis reveals several key insights:
+        1. **Cost Exposure**: The gap between high and low growth scenarios widens significantly over time, 
+           highlighting the importance of long-term cost management strategies.
+        2. **Risk Management**: The different scenarios can help in developing hedging strategies for fuel 
+           and carbon prices.
+        3. **Investment Planning**: Understanding potential cost ranges aids in making decisions about 
+           fleet modernization and sustainable aviation fuel adoption.
+        """)
 def display_carbon_price_analysis(air_emissions, rail_emissions, bus_emissions, away_team, home_team):
     """Display carbon price analysis with proper formatting"""
     st.markdown("### 💰 Carbon Price Analysis")
