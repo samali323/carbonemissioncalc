@@ -1,5 +1,6 @@
 import sqlite3
 
+import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -644,7 +645,7 @@ def display_economic_impacts(result, home_team, away_team):
 
     # Operational costs calculation
     operational_costs = {
-        'base_charter': flight_hours * 32500,
+        'base_charter': flight_hours * 25000,
         'landing_fees': 10000,
         'catering': 3500,
         'ground_transport': 2250,
@@ -728,7 +729,7 @@ def display_economic_impacts(result, home_team, away_team):
     }
 
     # Create tabs
-    summary_tab, ops_tab, carbon_tab, opt_tab, viz_tab = st.tabs(["Summary", "Operational Costs", "Carbon Costs", "Cost Optimization", "Visualizations"])
+    summary_tab, ops_tab, carbon_tab, opt_tab, viz_tab,advanced_tab = st.tabs(["Summary", "Operational Costs", "Carbon Costs", "Cost Optimization", "Visualizations", "Advanced Analysis"])
 
     # Custom CSS for centered tables
     st.markdown("""
@@ -834,7 +835,7 @@ def display_economic_impacts(result, home_team, away_team):
             st.markdown(f"""
             <div style='padding: 15px; background-color: transparent; border-radius: 5px;'>
                 Flight Duration: {flight_hours:.1f} hours<br>
-                Charter Rate: €32,500/hour<br>
+                Charter Rate: €25,000/hour<br>
                 Base Charter Cost: {format_currency(operational_costs['base_charter'])}<br>
                 Landing Fees: {format_currency(operational_costs['landing_fees'])}<br>
                 Catering: {format_currency(operational_costs['catering'])}<br>
@@ -843,25 +844,88 @@ def display_economic_impacts(result, home_team, away_team):
             """, unsafe_allow_html=True)
 
         with col2:
+            st.markdown("#### Fuel Mix Configuration")
+
+            # Add slider for SAF percentage
+            saf_percentage = st.slider(
+                "SAF Percentage in Fuel Mix",
+                min_value=0,
+                max_value=100,
+                value=2,
+                help="Percentage of Sustainable Aviation Fuel in the total fuel mix"
+            )
+
+            # Add price adjustments
+            col_conv, col_saf = st.columns(2)
+            with col_conv:
+                conventional_price = st.number_input(
+                    "Conventional Fuel Price (€/L)",
+                    min_value=1.0,
+                    max_value=10.0,
+                    value=2.5,
+                    step=0.1
+                )
+
+            with col_saf:
+                saf_price = st.number_input(
+                    "SAF Price (€/L)",
+                    min_value=1.0,
+                    max_value=20.0,
+                    value=7.5,
+                    step=0.1
+                )
+
+            # Calculate volumes and costs based on user inputs
+            conventional_percentage = 100 - saf_percentage
+            total_fuel = result.fuel_consumption  # Total fuel volume in liters
+
+            conventional_volume = total_fuel * (conventional_percentage/100)
+            saf_volume = total_fuel * (saf_percentage/100)
+
+            conventional_cost = conventional_volume * conventional_price
+            saf_cost = saf_volume * saf_price
+            total_cost = conventional_cost + saf_cost
+
+            # Display fuel breakdown
             st.markdown("#### Fuel Breakdown")
             st.markdown(f"""
             <div style='padding: 15px; background-color: transparent; border-radius: 5px;'>
-                Conventional Jet A-1 (98%)<br>
-                Volume: {cost_data['fuel']['conventional']['volume']:.0f}L<br>
-                Cost: {format_currency(cost_data['fuel']['conventional']['cost'])}<br><br>
-                SAF (2%)<br>
-                Volume: {cost_data['fuel']['saf']['volume']:.0f}L<br>
-                Cost: {format_currency(cost_data['fuel']['saf']['cost'])}
+                <b>Conventional Jet A-1 ({conventional_percentage}%)</b><br>
+                Volume: {conventional_volume:.0f}L<br>
+                Cost: {format_currency(conventional_cost)}<br><br>
+                <b>SAF ({saf_percentage}%)</b><br>
+                Volume: {saf_volume:.0f}L<br>
+                Cost: {format_currency(saf_cost)}<br><br>
+                <b>Total Fuel Cost: {format_currency(total_cost)}</b>
+            </div>
+            """, unsafe_allow_html=True)
+
+            # Calculate and display emissions impact
+            conventional_emissions = conventional_volume * 3.16  # kg CO2/L
+            saf_emissions = saf_volume * 0.80  # kg CO2/L (approximately 80% reduction)
+            total_emissions = conventional_emissions + saf_emissions
+            baseline_emissions = total_fuel * 3.16  # If using 100% conventional fuel
+
+            emissions_saved = baseline_emissions - total_emissions
+            emissions_saved_percentage = (emissions_saved / baseline_emissions) * 100
+
+            st.markdown("#### Emissions Impact")
+            st.markdown(f"""
+            <div style='padding: 15px; background-color: transparent; border-radius: 5px;'>
+                <b>Emissions Savings:</b><br>
+                {emissions_saved/1000:.2f} tons CO₂ ({emissions_saved_percentage:.1f}% reduction)<br>
+                Equivalent to {(emissions_saved/1000 * 2.47):.1f} trees planted
             </div>
             """, unsafe_allow_html=True)
 
         st.markdown("---")
         st.markdown("#### Total Operational Costs")
+        total_operational = total_charter + total_cost
         st.markdown(f"""
         <div style='padding: 15px; background-color: transparent; border-radius: 5px;'>
             Charter Costs: {format_currency(total_charter)}<br>
-            Fuel Costs: {format_currency(cost_data['fuel']['total'])}<br>
-            <strong>Total: {format_currency(cost_data['totals']['operational'])}</strong>
+            Fuel Costs: {format_currency(total_cost)}<br>
+            <strong>Total: {format_currency(total_operational)}</strong>
         </div>
         """, unsafe_allow_html=True)
 
@@ -1168,6 +1232,289 @@ def display_economic_impacts(result, home_team, away_team):
            and carbon prices.
         3. **Investment Planning**: Understanding potential cost ranges aids in making decisions about 
            fleet modernization and sustainable aviation fuel adoption.
+        """)
+    with advanced_tab:
+        st.markdown("### 📊 Advanced Economic Analysis")
+        # Add explanation at the top
+        st.info("""
+        This section provides advanced financial analysis of your selected flight's costs over time. 
+        It helps understand the true cost implications considering factors like:
+        - Time value of money (future costs in today's terms)
+        - Different growth scenarios
+        - Risk and uncertainty in cost projections
+        """)
+
+    # Time Value of Money Section
+        st.markdown("#### 💰 Time Value of Money Analysis")
+
+        st.markdown("""
+        **Understanding Time Value of Money:**
+        - Money today is worth more than the same amount in the future
+        - The discount rate represents how much future costs are 'discounted' to present value
+        - Higher discount rates mean future costs are valued less in today's terms
+        - Lower discount rates mean future costs are valued closer to their nominal amount
+        """)
+        col1, col2 = st.columns(2)
+
+        with col1:
+            discount_rate = st.slider("Discount Rate (%)", 1.0, 15.0, 8.0, 0.5) / 100
+            inflation = st.number_input("Expected Annual Inflation (%)", min_value=0.0, max_value=20.0, value=2.0) / 100
+
+            st.markdown("""
+            **What these inputs mean:**
+            - **Discount Rate**: Standard corporate rate is typically 8%
+            - **Inflation**: General price increase expectation
+            """)
+
+
+        # Calculate NPV for each scenario
+        scenario_npv_data = []
+        for scenario, rates in scenarios.items():
+            npv = 0
+            for year in range(projection_years):
+                annual_cost = (
+                        total_operational * (1 + rates['operational_increase'])**year +
+                        total_carbon_cost * (1 + rates['carbon_increase'])**year +
+                        total_fuel_cost * (1 + rates['fuel_increase'])**year
+                )
+                npv += annual_cost / (1 + discount_rate)**year
+            scenario_npv_data.append({'Scenario': scenario, 'NPV': round(npv)})
+
+        with col2:
+            st.markdown("**Net Present Value (NPV) by Scenario:**")
+            for data in scenario_npv_data:
+                st.metric(
+                    f"{data['Scenario']} NPV",
+                    f"€{data['NPV']:,.0f}",
+                    help=f"Net Present Value using {discount_rate*100:.1f}% discount rate"
+                )
+
+            # Calculate the range of potential costs
+            npv_values = [d['NPV'] for d in scenario_npv_data]
+            cost_range = max(npv_values) - min(npv_values)
+
+            st.markdown(f"""
+            **What this means for your flight:**
+            - Total cost range: €{cost_range:,.0f} over {projection_years} years
+            - Best case (Low Growth): €{min(npv_values):,.0f}
+            - Worst case (High Growth): €{max(npv_values):,.0f}
+            """)
+
+        st.markdown("---")
+        # In the advanced_tab section, update the break-even analysis:
+        st.markdown("#### 🎯 Break-Even Analysis")
+        st.markdown("""
+            **Understanding Break-Even Analysis:**
+            This shows when Sustainable Aviation Fuel (SAF) becomes cost-competitive with conventional fuel, 
+            considering both direct fuel costs and carbon pricing impacts.
+        """)
+
+        # Extended break-even calculation (up to 30 years)
+        extended_years = 30
+        years_extended = list(range(base_year, base_year + extended_years))
+
+        # Calculate prices with carbon costs included
+        saf_prices = [7.5*(0.97**i) + combined_df['EU ETS'][min(i, projection_years-1)] for i in range(extended_years)]
+        conv_prices = [2.5*(1.05**i) + combined_df['EU ETS'][min(i, projection_years-1)] for i in range(extended_years)]
+
+        # Find break-even point
+        try:
+            break_even_year = next(i for i in range(extended_years) if saf_prices[i] < conv_prices[i])
+            years_to_breakeven = break_even_year
+            break_even_price = saf_prices[break_even_year]
+
+            # Create price convergence visualization
+            convergence_df = pd.DataFrame({
+                'Year': years_extended,
+                'SAF Total Cost': saf_prices,
+                'Conventional Total Cost': conv_prices
+            })
+
+            fig_breakeven = px.line(
+                convergence_df,
+                x='Year',
+                y=['SAF Total Cost', 'Conventional Total Cost'],
+                title='Fuel Price Convergence Projection',
+                template='plotly_dark'
+            )
+
+            # Add break-even point marker
+            fig_breakeven.add_scatter(
+                x=[base_year + break_even_year],
+                y=[break_even_price],
+                mode='markers',
+                marker=dict(size=12, symbol='star', color='yellow'),
+                name='Break-even Point',
+                hovertemplate=f'Break-even Year: {base_year + break_even_year}<br>Price: €{break_even_price:.2f}/L'
+            )
+
+            fig_breakeven.update_layout(
+                yaxis_title='Price per Liter (€)',
+                hovermode='x unified'
+            )
+
+            # Display break-even metrics
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric(
+                    "Years to Break-even",
+                    f"{years_to_breakeven}",
+                    help="Number of years until SAF becomes cost-competitive"
+                )
+            with col2:
+                st.metric(
+                    "Break-even Year",
+                    f"{base_year + break_even_year}",
+                    help="Calendar year when SAF becomes cost-competitive"
+                )
+            with col3:
+                st.metric(
+                    "Break-even Price",
+                    f"€{break_even_price:.2f}/L",
+                    help="Price point where SAF matches conventional fuel cost"
+                )
+
+            st.plotly_chart(fig_breakeven, use_container_width=True)
+
+            # Add price trajectory explanation
+            st.markdown(f"""
+            **Price Convergence Analysis:**
+            - SAF starts at €7.50/L and decreases by 3% annually
+            - Conventional fuel starts at €2.50/L and increases by 5% annually
+            - Carbon costs are included in both trajectories
+            - Break-even occurs in {base_year + break_even_year} at €{break_even_price:.2f}/L
+            - Factors accelerating break-even:
+                - Higher carbon prices
+                - Faster SAF price reduction
+                - Slower conventional fuel price increase
+            """)
+
+        except StopIteration:
+            st.warning("""
+            **No Break-even Point Found:**
+            Even with a 30-year projection, SAF does not become cost-competitive under current assumptions.
+            
+            Factors that could change this:
+            - Higher carbon prices
+            - Faster SAF price reduction (currently 3% per year)
+            - Faster conventional fuel price increase (currently 5% per year)
+            - Government subsidies or incentives
+            """)
+
+            # Show closest approach
+            min_difference_year = min(range(extended_years),
+                                      key=lambda i: saf_prices[i] - conv_prices[i])
+            min_difference = saf_prices[min_difference_year] - conv_prices[min_difference_year]
+
+            st.markdown(f"""
+            **Closest Approach to Break-even:**
+            - Year: {base_year + min_difference_year}
+            - Price gap: €{min_difference:.2f}/L
+            - SAF price: €{saf_prices[min_difference_year]:.2f}/L
+            - Conventional price: €{conv_prices[min_difference_year]:.2f}/L
+            """)
+        st.markdown("---")
+        # Monte Carlo Simulation
+        st.markdown("#### 🎲 Monte Carlo Simulation")
+
+        n_simulations = 1000
+
+        @st.cache_data
+        def run_monte_carlo(n_sims, base_cost, mean_growth, std_dev):
+            np.random.seed(42)  # For reproducibility
+            fuel_growth_dist = np.random.normal(loc=mean_growth, scale=std_dev, size=n_sims)
+            results = []
+            for growth_rate in fuel_growth_dist:
+                final_year_cost = base_cost * (1 + growth_rate)**projection_years
+                results.append(final_year_cost)
+            return results
+
+        # Run simulation for total costs
+        simulation_results = run_monte_carlo(
+            n_simulations,
+            total_cost,
+            0.05,  # mean growth rate
+            0.02   # standard deviation
+        )
+
+        # Create histogram using plotly
+        fig_monte_carlo = px.histogram(
+            simulation_results,
+            nbins=30,
+            title='Cost Distribution (Monte Carlo Simulation)',
+            labels={'value': 'Total Cost (€)', 'count': 'Frequency'},
+            template='plotly_dark'
+        )
+        st.plotly_chart(fig_monte_carlo, use_container_width=True)
+        # Monte Carlo Simulation with explanation
+        st.markdown("""
+        **What is Monte Carlo Simulation?**
+        - Simulates thousands of possible cost scenarios
+        - Accounts for uncertainty in future prices
+        - Shows the range of likely total costs
+        - Helps understand the risk profile of different choices
+        """)
+        st.markdown("---")
+
+        # Add sensitivity analysis visualization
+        st.markdown("#### 📉 Sensitivity Analysis")
+
+        # Create sensitivity data
+        sensitivity_data = pd.DataFrame({
+            'Factor': ['Fuel Price', 'Carbon Price', 'Operational Costs'],
+            'Impact': [
+                total_fuel_cost * 0.1,  # 10% change in fuel price
+                total_carbon_cost * 0.1,  # 10% change in carbon price
+                total_operational * 0.1  # 10% change in operational costs
+            ]
+        })
+
+        fig_sensitivity = px.bar(
+            sensitivity_data,
+            x='Factor',
+            y='Impact',
+            title='Cost Sensitivity (Impact of 10% Change)',
+            template='plotly_dark'
+        )
+        st.plotly_chart(fig_sensitivity, use_container_width=True)
+        st.markdown("---")
+        # Strategic Recommendations
+        st.markdown("### 🚀 Strategic Recommendations")
+
+        # Calculate some metrics for recommendations
+        avg_carbon_cost = np.mean([total_carbon_cost * (1.08**i) for i in range(projection_years)])
+        efficiency_gain = 0.15  # 15% better fuel efficiency for new aircraft
+
+        st.markdown(f"""
+        1. **Fuel Hedging Strategy**
+           - Implement hedging for 40-60% of fuel needs based on volatility analysis
+           - Consider fixed-price contracts for SAF supply
+           
+        2. **SAF Adoption Roadmap**
+           - {"Target " + str(base_year + break_even_year) + " for price parity" if 'break_even_year' in locals() else "Continue monitoring SAF price trends"}
+           - Explore partnerships with SAF producers for secure supply
+           
+        3. **Carbon Market Strategy**
+           - Allocate approximately €{avg_carbon_cost:,.0f} for annual carbon credit purchases
+           - Develop internal carbon pricing mechanism
+           
+        4. **Fleet Modernization**
+           - Potential {efficiency_gain*100:.0f}% fuel efficiency improvement with next-generation aircraft
+           - ROI analysis suggests prioritizing fleet renewal where possible
+        """)
+        # Add impact text at the bottom
+        st.success(f"""
+        **Key Takeaways for Your Flight:**
+        1. **Expected Cost Range**: €{min(npv_values):,.0f} to €{max(npv_values):,.0f} in today's terms
+        2. **Risk Level**: {
+        'High' if cost_range > total_cost * 0.5
+        else 'Medium' if cost_range > total_cost * 0.25
+        else 'Low'
+        } variability in potential costs
+        3. **Recommended Actions**:
+           - Consider {'hedging fuel prices' if cost_range > total_cost * 0.3 else 'fixed price contracts'}
+           - {'Accelerate SAF adoption' if 'break_even_year' in locals() and break_even_year < 5 else 'Monitor SAF prices'}
+           - {'Priority for cost management' if cost_range > total_cost * 0.4 else 'Standard cost monitoring'}
         """)
 def display_carbon_price_analysis(air_emissions, rail_emissions, bus_emissions, away_team, home_team):
     """Display carbon price analysis with proper formatting"""
