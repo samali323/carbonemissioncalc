@@ -375,7 +375,7 @@ def display_transport_comparison(result):
         flight_emissions = result.total_emissions
 
     try:
-        conn = sqlite3.connect('../data/routes.db')
+        conn = sqlite3.connect('data/routes.db')
         cursor = conn.cursor()
 
         # Get route data
