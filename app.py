@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 import streamlit as st
-import streamlit_nested_layout
+
 from src.config.constants import SOCIAL_CARBON_COSTS
 from src.data.team_data import get_all_teams, get_team_airport, get_airport_coordinates, TEAM_COUNTRIES
 from src.models.emissions import EmissionsCalculator
