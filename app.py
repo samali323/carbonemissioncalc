@@ -137,7 +137,8 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-def display_results(result):
+def display_results(result, rail_emissions=None, bus_emissions=None,
+                    flight_salary_impact=None, rail_salary_impact=None, bus_salary_impact=None):
     """Display calculation results with collapsible sections"""
     if not st.session_state.get('last_calculation', {}).get('calculated'):
         return
@@ -147,6 +148,7 @@ def display_results(result):
 
     if not home_team or not away_team:
         return
+
 
     st.markdown("---")
 
@@ -194,10 +196,6 @@ def display_results(result):
     with col4:
         st.metric("Flight Type", result.flight_type)
 
-    # Transport Mode Comparison (always expanded)
-    with st.expander("🚊 Transport Mode Comparison", expanded=True):
-        rail_emissions, bus_emissions = display_transport_comparison(result)
-
     # Environmental Impact (always expanded)
     with st.expander("🌍 Environmental Impact", expanded=False):
         impact = calculate_equivalencies(result.total_emissions)
@@ -237,8 +235,12 @@ def display_results(result):
         display_economic_impacts(
             result=result,
             home_team=st.session_state.form_state['home_team'],
-            away_team=st.session_state.form_state['away_team']
+            away_team=st.session_state.form_state['away_team'],
+            flight_salary_impact=flight_salary_impact,
+            rail_salary_impact=rail_salary_impact,
+            bus_salary_impact=bus_salary_impact
         )
+
         # Cost Analysis (collapsible)
     with st.expander("💰 Carbon Price Breakdown", expanded=False):
         display_carbon_price_analysis(
@@ -376,44 +378,36 @@ def display_transport_comparison(result):
         flight_time_str = format_time_duration(flight_time_seconds)
         flight_emissions = result.total_emissions
 
-    # Check route feasibility
-    rail_feasible = calculate_transport_emissions(
-        'rail',
-        result.distance_km,
-        st.session_state.form_state['passengers'],
-        result.is_round_trip,
-        home_team,
-        away_team
-    ) is not None
-
-    bus_feasible = calculate_transport_emissions(
-        'bus',
-        result.distance_km,
-        st.session_state.form_state['passengers'],
-        result.is_round_trip,
-        home_team,
-        away_team
-    ) is not None
-
     try:
         conn = sqlite3.connect('data/routes.db')
         cursor = conn.cursor()
 
+        # Get route data
         cursor.execute("""
-      SELECT 
-          transit_duration,
-          transit_distance,
-          rail_emissions,
-          driving_duration,
-          driving_distance,
-          bus_emissions
-      FROM match_emissions
-      WHERE distance_km = ? 
-      ORDER BY last_updated DESC
-      LIMIT 1
-      """, (result.distance_km / (2 if result.is_round_trip else 1),))
+            SELECT 
+                transit_duration,
+                transit_distance,
+                rail_emissions,
+                driving_duration,
+                driving_distance,
+                bus_emissions
+            FROM match_emissions
+            WHERE distance_km = ? 
+            ORDER BY last_updated DESC
+            LIMIT 1
+        """, (result.distance_km / (2 if result.is_round_trip else 1),))
 
         route_data = cursor.fetchone()
+
+        # Get salary data
+        cursor.execute("""
+            SELECT gross_per_minute
+            FROM team_salaries
+            WHERE team = ?
+        """, (home_team,))
+        salary_data = cursor.fetchone()
+        team_salary = salary_data[0] if salary_data else None
+
         if route_data:
             multiplier = 2 if result.is_round_trip else 1
 
@@ -422,8 +416,7 @@ def display_transport_comparison(result):
                 transit_time_seconds = route_data[0] * multiplier if route_data[0] else 1800
                 transit_time_str = format_time_duration(transit_time_seconds)
                 transit_time_diff = format_time_diff(transit_time_seconds - flight_time_seconds)
-                transit_distance = route_data[1] * multiplier if route_data[1] else (
-                    15 if is_derby else result.distance_km)
+                transit_distance = route_data[1] * multiplier if route_data[1] else (15 if is_derby else result.distance_km)
                 rail_emissions = route_data[2] * multiplier if route_data[2] else calculate_transport_emissions(
                     'rail',
                     15 if is_derby else result.distance_km,
@@ -435,14 +428,14 @@ def display_transport_comparison(result):
                 transit_time_diff = "N/A"
                 transit_distance = "N/A"
                 rail_emissions = None
+                transit_time_seconds = 0
 
             # Bus data handling
             if bus_feasible:
                 driving_time_seconds = route_data[3] * multiplier if route_data[3] else 2700
                 driving_time_str = format_time_duration(driving_time_seconds)
                 driving_time_diff = format_time_diff(driving_time_seconds - flight_time_seconds)
-                driving_distance = route_data[4] * multiplier if route_data[4] else (
-                    15 if is_derby else result.distance_km)
+                driving_distance = route_data[4] * multiplier if route_data[4] else (15 if is_derby else result.distance_km)
                 bus_emissions = route_data[5] * multiplier if route_data[5] else calculate_transport_emissions(
                     'bus',
                     15 if is_derby else result.distance_km,
@@ -454,6 +447,7 @@ def display_transport_comparison(result):
                 driving_time_diff = "N/A"
                 driving_distance = "N/A"
                 bus_emissions = None
+                driving_time_seconds = 0
 
         else:
             # Default values for routes not in database
@@ -461,6 +455,7 @@ def display_transport_comparison(result):
                 transit_time_str = "30 minutes" if is_derby else "N/A*"
                 transit_time_diff = "-"
                 transit_distance = 15 if is_derby else result.distance_km
+                transit_time_seconds = 1800 if is_derby else 0
                 rail_emissions = calculate_transport_emissions(
                     'rail',
                     5 if is_derby else result.distance_km,
@@ -472,11 +467,13 @@ def display_transport_comparison(result):
                 transit_time_diff = "N/A"
                 transit_distance = "N/A"
                 rail_emissions = None
+                transit_time_seconds = 0
 
             if bus_feasible:
                 driving_time_str = "45 minutes" if is_derby else "N/A*"
                 driving_time_diff = "-"
                 driving_distance = 5 if is_derby else result.distance_km
+                driving_time_seconds = 2700 if is_derby else 0
                 bus_emissions = calculate_transport_emissions(
                     'bus',
                     5 if is_derby else result.distance_km,
@@ -488,6 +485,12 @@ def display_transport_comparison(result):
                 driving_time_diff = "N/A"
                 driving_distance = "N/A"
                 bus_emissions = None
+                driving_time_seconds = 0
+
+        # Calculate salary impacts
+        flight_salary_impact = (flight_time_seconds/60) * team_salary if team_salary else None
+        rail_salary_impact = (transit_time_seconds/60) * team_salary if team_salary and rail_feasible else None
+        bus_salary_impact = (driving_time_seconds/60) * team_salary if team_salary and bus_feasible else None
 
     except Exception as e:
         st.error(f"Error retrieving transport data: {str(e)}")
@@ -496,100 +499,107 @@ def display_transport_comparison(result):
     finally:
         if 'conn' in locals():
             conn.close()
+
         st.markdown("""
-      <style>
-      .styled-table {
-          width: 100%;
-          border-collapse: collapse;
-          margin: 25px 0;
-          background-color: transparent;
-          font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-          font-size: 14px;
-      }
-      .styled-table thead tr {
-          background-color: transparent;
-          color: #6B7280;
-          text-align: center;
-          font-weight: normal;
-          height: 50px;
-      }
-      .styled-table th,
-      .styled-table td {
-          padding: 16px 24px;
-          text-align: center;
-          border-bottom: 1px solid #1f2937;
-          white-space: nowrap;
-      }
-      .styled-table tbody tr {
-          color: white;
-          height: 50px;
-      }
-      .styled-table tbody tr:last-of-type {
-          border-bottom: none;
-      }
-      .styled-table tbody tr:hover {
-          background-color: #1f2937;
-      }
-      [data-testid="stExpander"] {
-          min-width: 100%;
-          padding: 16px;
-      }
-      .footnotes {
-          font-size: 12px;
-          color: #6B7280;
-          margin-top: 8px;
-          padding-left: 16px;
-      }
-      </style>
-  """, unsafe_allow_html=True)
+            <style>
+            .styled-table {
+                width: 100%;
+                border-collapse: collapse;
+                margin: 25px 0;
+                background-color: transparent;
+                font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+                font-size: 14px;
+            }
+            .styled-table thead tr {
+                background-color: transparent;
+                color: #6B7280;
+                text-align: center;
+                font-weight: normal;
+                height: 50px;
+            }
+            .styled-table th,
+            .styled-table td {
+                padding: 16px 24px;
+                text-align: center;
+                border-bottom: 1px solid #1f2937;
+                white-space: nowrap;
+            }
+            .styled-table tbody tr {
+                color: white;
+                height: 50px;
+            }
+            .styled-table tbody tr:last-of-type {
+                border-bottom: none;
+            }
+            .styled-table tbody tr:hover {
+                background-color: #1f2937;
+            }
+            [data-testid="stExpander"] {
+                min-width: 100%;
+                padding: 16px;
+            }
+            .footnotes {
+                font-size: 12px;
+                color: #6B7280;
+                margin-top: 8px;
+                padding-left: 16px;
+            }
+            </style>
+        """, unsafe_allow_html=True)
+
         st.markdown(f"""
-           <table class="styled-table">
-               <thead>
-                   <tr>
-                       <th>Mode</th>
-                       <th>Est. Travel Time</th>
-                       <th>Time Impact</th>
-                       <th>Distance (km)</th>
-                       <th>CO₂ (tons)</th>
-                       <th>CO₂ Saved (tons)</th>
-                   </tr>
-               </thead>
-               <tbody>
-                   <tr>
-                       <td>✈️ Air</td>
-                       <td>{flight_time_str}</td>
-                       <td>-</td>
-                       <td>{"N/A" if is_derby else f"{result.distance_km:,.1f}"}</td>
-                       <td>{flight_emissions:.2f}</td>
-                       <td>0.00</td>
-                   </tr>
-                   <tr>
-                       <td>🚂 Rail</td>
-                       <td>{transit_time_str}</td>
-                       <td>{transit_time_diff}</td>
-                       <td>{"N/A" if not rail_feasible else f"{transit_distance:,.1f}" if isinstance(transit_distance, (int, float)) else "N/A"}</td>
-                       <td>{"N/A" if not rail_feasible else f"{rail_emissions:.2f}" if rail_emissions is not None else "N/A"}</td>
-                       <td>{"N/A" if not rail_feasible else f"{max(0, flight_emissions - rail_emissions):.2f}" if rail_emissions is not None else "N/A"}</td>
-                   </tr>
-                   <tr>
-                       <td>🚌 Bus</td>
-                       <td>{driving_time_str}</td>
-                       <td>{driving_time_diff}</td>
-                       <td>{"N/A" if not bus_feasible else f"{driving_distance:,.1f}" if isinstance(driving_distance, (int, float)) else "N/A"}</td>
-                       <td>{"N/A" if not bus_feasible else f"{bus_emissions:.2f}" if bus_emissions is not None else "N/A"}</td>
-                       <td>{"N/A" if not bus_feasible else f"{max(0, flight_emissions - bus_emissions):.2f}" if bus_emissions is not None else "N/A"}</td>
-                   </tr>
-               </tbody>
-           </table>
-           <div class="footnotes">
-               {rail_note}<br/>
-               {bus_note}
-           </div>
-           """, unsafe_allow_html=True)
-    return rail_emissions, bus_emissions
+            <table class="styled-table">
+                <thead>
+                    <tr>
+                        <th>Mode</th>
+                        <th>Est. Travel Time</th>
+                        <th>Time Impact</th>
+                        <th>Salary Impact (€)</th>
+                        <th>Distance (km)</th>
+                        <th>CO₂ (tons)</th>
+                        <th>CO₂ Saved (tons)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>✈️ Air</td>
+                        <td>{flight_time_str}</td>
+                        <td>-</td>
+                        <td>{f"€{flight_salary_impact:,.2f}" if flight_salary_impact is not None else "N/A"}</td>
+                        <td>{"N/A" if is_derby else f"{result.distance_km:,.1f}"}</td>
+                        <td>{flight_emissions:.2f}</td>
+                        <td>0.00</td>
+                    </tr>
+                    <tr>
+                        <td>🚂 Rail</td>
+                        <td>{transit_time_str}</td>
+                        <td>{transit_time_diff}</td>
+                        <td>{f"€{rail_salary_impact:,.2f}" if rail_salary_impact is not None else "N/A"}</td>
+                        <td>{"N/A" if not rail_feasible else f"{transit_distance:,.1f}" if isinstance(transit_distance, (int, float)) else "N/A"}</td>
+                        <td>{"N/A" if not rail_feasible else f"{rail_emissions:.2f}" if rail_emissions is not None else "N/A"}</td>
+                        <td>{"N/A" if not rail_feasible else f"{max(0, flight_emissions - rail_emissions):.2f}" if rail_emissions is not None else "N/A"}</td>
+                    </tr>
+                    <tr>
+                        <td>🚌 Bus</td>
+                        <td>{driving_time_str}</td>
+                        <td>{driving_time_diff}</td>
+                        <td>{f"€{bus_salary_impact:,.2f}" if bus_salary_impact is not None else "N/A"}</td>
+                        <td>{"N/A" if not bus_feasible else f"{driving_distance:,.1f}" if isinstance(driving_distance, (int, float)) else "N/A"}</td>
+                        <td>{"N/A" if not bus_feasible else f"{bus_emissions:.2f}" if bus_emissions is not None else "N/A"}</td>
+                        <td>{"N/A" if not bus_feasible else f"{max(0, flight_emissions - bus_emissions):.2f}" if bus_emissions is not None else "N/A"}</td>
+                    </tr>
+                </tbody>
+            </table>
+            <div class="footnotes">
+                {rail_note}<br/>
+                {bus_note}
+            </div>
+            """, unsafe_allow_html=True)
+
+    return rail_emissions, bus_emissions, flight_salary_impact, rail_salary_impact, bus_salary_impact
 
 
-def display_economic_impacts(result, home_team, away_team):
+def display_economic_impacts(result, home_team, away_team,flight_salary_impact, rail_salary_impact, bus_salary_impact):
     """Display economic impact analysis with costs summary and all optimization options."""
     calculator = EnhancedCarbonPricingCalculator()
     home_country = TEAM_COUNTRIES.get(home_team, 'EU')
@@ -660,45 +670,53 @@ def display_economic_impacts(result, home_team, away_team):
     total_charter = sum(operational_costs.values())
     total_operational = total_charter + total_fuel_cost
     total_environmental = total_carbon_cost + avg_social_cost
-    total_cost = total_operational + total_environmental
+    total_flight_salary_impact = flight_salary_impact
+    total_cost = total_operational + total_environmental + total_flight_salary_impact
 
     # Alternative costs and savings
     alternatives = {
         'empty_leg': {
             'operational': total_operational * 0.25,
             'carbon': total_carbon_cost,
-            'social': avg_social_cost
+            'social': avg_social_cost,
+            'salary': flight_salary_impact
         },
         'regional_airport': {
             'operational': total_operational - (operational_costs['landing_fees'] * 0.3),
             'carbon': total_carbon_cost,
-            'social': avg_social_cost
+            'social': avg_social_cost,
+            'salary': flight_salary_impact
         },
         'bulk_rate': {
             'operational': total_operational * 0.85,
             'carbon': total_carbon_cost,
-            'social': avg_social_cost
+            'social': avg_social_cost,
+            'salary': flight_salary_impact
         },
         'split_charter': {
-            'operational': total_operational * 1.1,
-            'carbon': total_carbon_cost * 1.2,
-            'social': avg_social_cost * 1.2
+            'operational': total_operational * 2,
+            'carbon': total_carbon_cost * 2,
+            'social': avg_social_cost * 2,
+            'salary': flight_salary_impact/2
         }
     }
 
     # Add transport alternatives
     if rail_emissions:
         alternatives['rail'] = {
-            'operational': total_operational * 0.3,
+            'operational': total_operational * 0.1,
             'carbon': rail_emissions * calculator.EU_ETS_PRICE,
-            'social': rail_emissions * (sum(SOCIAL_CARBON_COSTS.values()) / len(SOCIAL_CARBON_COSTS))
+            'social': rail_emissions * (sum(SOCIAL_CARBON_COSTS.values()) / len(SOCIAL_CARBON_COSTS)),
+            'salary': rail_salary_impact
+
         }
 
     if bus_emissions:
         alternatives['bus'] = {
             'operational': total_operational * 0.2,
             'carbon': bus_emissions * calculator.EU_ETS_PRICE,
-            'social': bus_emissions * (sum(SOCIAL_CARBON_COSTS.values()) / len(SOCIAL_CARBON_COSTS))
+            'social': bus_emissions * (sum(SOCIAL_CARBON_COSTS.values()) / len(SOCIAL_CARBON_COSTS)),
+            'salary': bus_salary_impact
         }
 
     # Store cost components
@@ -729,7 +747,7 @@ def display_economic_impacts(result, home_team, away_team):
     }
 
     # Create tabs
-    summary_tab, ops_tab, carbon_tab, opt_tab, viz_tab,advanced_tab = st.tabs(["Summary", "Operational Costs", "Carbon Costs", "Cost Optimization", "Visualizations", "Advanced Analysis"])
+    summary_tab, ops_tab, carbon_tab, viz_tab,advanced_tab = st.tabs(["Summary", "Operational Costs", "Carbon Costs", "Visualizations", "Advanced Analysis"])
 
     # Custom CSS for centered tables
     st.markdown("""
@@ -784,38 +802,37 @@ def display_economic_impacts(result, home_team, away_team):
         data = [
             ["Operational Costs", format_currency(total_operational)],
             ["Environmental Impact", format_currency(total_environmental)],
+            ["Salary Impact", format_currency(total_flight_salary_impact)],
             ["Total Cost", format_currency(total_cost)]
         ]
         st.markdown(create_centered_table(headers, data), unsafe_allow_html=True)
 
-        # Potential Savings Table
+        # Potential Cost Savings
         st.markdown("### Potential Cost Savings")
         savings_data = []
         for option, costs in alternatives.items():
-            total_alt_cost = costs['operational'] + costs['carbon'] + costs['social']
+            total_alt_operational = costs['operational']
+            total_alt_carbon = costs['carbon']
+            total_alt_social = costs['social']
+            alt_salary_impact = costs['salary'] if costs['salary'] is not None else 0
+
+            total_alt_cost = total_alt_operational + total_alt_carbon + total_alt_social + alt_salary_impact
             savings = total_cost - total_alt_cost
             savings_percent = (savings / total_cost) * 100
+
+            savings_display = f"Savings: {format_currency(savings)}" if savings >= 0 else f"Additional Cost: {format_currency(abs(savings))}"
+            savings_percent_display = f"{savings_percent:.1f}%" if savings >= 0 else f"{abs(savings_percent):.1f}%"
+
             savings_data.append([
                 option.replace('_', ' ').title(),
                 format_currency(total_alt_cost),
-                format_currency(savings),
-                f"{savings_percent:.1f}%"
+                savings_display,
+                savings_percent_display
             ])
 
-        headers = ["Option", "Total Cost", "Savings", "Savings %"]
+        headers = ["Option", "Total Cost", "Financial Impact", "Impact %"]
         st.markdown(create_centered_table(headers, savings_data), unsafe_allow_html=True)
 
-        # Recommendations
-        st.markdown("### Recommendations")
-        best_option = max(alternatives.items(),
-                          key=lambda x: (total_cost - (x[1]['operational'] + x[1]['carbon'] + x[1]['social'])))
-        st.markdown(f"""
-        <div style='padding: 15px; background-color: transparent; border-radius: 5px;'>
-            <strong>Most Cost-Effective Option:</strong> {best_option[0].replace('_', ' ').title()}<br>
-            <strong>Savings:</strong> {format_currency(total_cost - (best_option[1]['operational'] + best_option[1]['carbon'] + best_option[1]['social']))}<br>
-            <strong>Total Cost:</strong> {format_currency(best_option[1]['operational'] + best_option[1]['carbon'] + best_option[1]['social'])}
-        </div>
-        """, unsafe_allow_html=True)
 
         # Environmental Impact Table
         if rail_emissions and bus_emissions:
@@ -827,6 +844,15 @@ def display_economic_impacts(result, home_team, away_team):
                 ["Bus", f"{bus_emissions:,.2f}", f"{((result.total_emissions - bus_emissions)/result.total_emissions*100):.1f}%"]
             ]
             st.markdown(create_centered_table(headers, data), unsafe_allow_html=True)
+
+        # Footnotes
+        st.markdown("---")
+        st.markdown("""
+        **Footnotes:**
+        - *Empty Leg Flight*: 75% discount on operational costs as aircraft would fly empty otherwise
+        - *Regional Airport Option*: 30% reduction in landing fees using smaller airports
+        - *Bulk Rate Booking*: 15% discount through seasonal booking arrangements
+        """, unsafe_allow_html=True)
 
     with ops_tab:
         col1, col2 = st.columns(2)
@@ -968,57 +994,6 @@ def display_economic_impacts(result, home_team, away_team):
         </div>
         """, unsafe_allow_html=True)
 
-    with opt_tab:
-        st.markdown("### Cost Optimization Options")
-
-        def format_option(title, costs, description):
-            total_cost = sum(costs.values())
-            savings = total_cost - total_cost
-            return f"""
-            <div style='padding: 15px; background-color: transparent; border-radius: 5px; margin-bottom: 1rem;'>
-                <strong>{title}</strong><br>
-                Operational Cost: {format_currency(costs['operational'])}<br>
-                Carbon Cost: {format_currency(costs['carbon'])}<br>
-                Social Cost: {format_currency(costs['social'])}<br>
-                <strong>Total Cost: {format_currency(total_cost)}</strong><br>
-                <strong>Savings: {format_currency(savings)} ({(savings/total_cost)*100:.1f}%)</strong><br>
-                <em>{description}</em>
-            </div>
-            """
-
-        st.markdown(format_option(
-            "Empty Leg Flight",
-            alternatives['empty_leg'],
-            "75% discount on operational costs as aircraft would fly empty otherwise"
-        ), unsafe_allow_html=True)
-
-        st.markdown(format_option(
-            "Regional Airport Option",
-            alternatives['regional_airport'],
-            "30% reduction in landing fees using smaller airports"
-        ), unsafe_allow_html=True)
-
-        st.markdown(format_option(
-            "Bulk Rate Booking",
-            alternatives['bulk_rate'],
-            "15% discount through seasonal booking arrangements"
-        ), unsafe_allow_html=True)
-
-        if rail_emissions or bus_emissions:
-            st.markdown("#### Alternative Transport Options")
-            if rail_emissions:
-                st.markdown(format_option(
-                    "Rail Transport",
-                    alternatives['rail'],
-                    f"Reduces emissions by {((result.total_emissions - rail_emissions)/result.total_emissions*100):.1f}%"
-                ), unsafe_allow_html=True)
-
-            if bus_emissions:
-                st.markdown(format_option(
-                    "Bus Transport",
-                    alternatives['bus'],
-                    f"Reduces emissions by {((result.total_emissions - bus_emissions)/result.total_emissions*100):.1f}%"
-                ), unsafe_allow_html=True)
 
     with viz_tab:
         st.markdown("### 📈 Future Cost Projections")
@@ -1828,6 +1803,18 @@ with calculate_col2:
 
 # Display results if they exist in session state
 if 'last_calculation' in st.session_state:
+    result = st.session_state.last_calculation['result']
+    transport_comparison_results = display_transport_comparison(result)
+
+    # Unpack the return values
+    rail_emissions, bus_emissions, flight_salary_impact, rail_salary_impact, bus_salary_impact = transport_comparison_results
+
+    # Pass all return values to display_results
     display_results(
-        st.session_state.last_calculation['result']
+        result,
+        rail_emissions,
+        bus_emissions,
+        flight_salary_impact,
+        rail_salary_impact,
+        bus_salary_impact
     )
