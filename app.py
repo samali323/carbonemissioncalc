@@ -796,16 +796,92 @@ def display_economic_impacts(result, home_team, away_team, flight_salary_impact,
         return table_html % (header_cols, data_rows)
 
     with summary_tab:
-        with st.expander("Flight Impact Summary", ):
-            # Economic Impact Table
-            headers = ["Cost Category", "Amount (€)"]
-            data = [
-                ["Operational Costs", format_currency(total_operational)],
-                ["Environmental Impact", format_currency(total_environmental)],
-                ["Salary Impact", format_currency(total_flight_salary_impact)],
-                ["Total Cost", format_currency(total_cost)]
-            ]
-            st.markdown(create_centered_table(headers, data), unsafe_allow_html=True)
+        st.markdown("### 💰 Flight Impact Summary")
+
+        # Economic Impact Table
+        headers = ["Cost Category", "Amount (€)"]
+        data = [
+            ["Operational Costs", format_currency(total_operational)],
+            ["Environmental Impact", format_currency(total_environmental)],
+            ["Salary Impact", format_currency(total_flight_salary_impact)],
+            ["Total Cost", format_currency(total_cost)]
+        ]
+
+        # Table Style
+        st.markdown("""
+        <style>
+        .impact-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+            background-color: #1f2937;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .impact-table th {
+            background-color: #374151;
+            color: #ffffff;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+        }
+        .impact-table td {
+            padding: 12px;
+            border-bottom: 1px solid #374151;
+            color: #ffffff;
+        }
+        .impact-table tr:last-child td {
+            border-bottom: none;
+        }
+        .impact-table tr:hover {
+            background-color: #2d3748;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+
+        # Create table HTML
+        table_html = f"""
+        <table class="impact-table">
+            <thead>
+                <tr>
+                    <th>{headers[0]}</th>
+                    <th>{headers[1]}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {''.join(f'<tr><td>{row[0]}</td><td>{row[1]}</td></tr>' for row in data)}
+            </tbody>
+        </table>
+        """
+
+        st.markdown(table_html, unsafe_allow_html=True)
+
+        # Add visual separator
+        st.markdown("---")
+
+        # Optional summary metrics in columns
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.metric(
+                "Total Cost",
+                format_currency(total_cost),
+                help="Total combined cost of all impacts"
+            )
+
+        with col2:
+            st.metric(
+                "Cost per Passenger",
+                format_currency(total_cost / result.total_emissions),
+                help="Average cost per passenger"
+            )
+
+        with col3:
+            st.metric(
+                "Environmental Cost Share",
+                f"{(total_environmental/total_cost)*100:.1f}%",
+                help="Percentage of total cost from environmental impact"
+            )
 
         # Potential Cost Savings
         with st.expander("### Potential Cost Savings"):
