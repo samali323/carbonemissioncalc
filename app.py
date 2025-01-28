@@ -1264,61 +1264,83 @@ def display_economic_impacts(result, home_team, away_team,flight_salary_impact, 
         """)
 
         # Time Value of Money Section
-        st.markdown("#### 💰 Time Value of Money Analysis")
-
+        st.markdown("#### 💰 Cost Projection Analysis")
         st.markdown("""
-        **Understanding Time Value of Money:**
-        - Money today is worth more than the same amount in the future
-        - The discount rate represents how much future costs are 'discounted' to present value
-        - Higher discount rates mean future costs are valued less in today's terms
-        - Lower discount rates mean future costs are valued closer to their nominal amount
+        **Key Financial Concepts:**
+        - Future costs discounted to present value
+        - Operational cost growth projections
+        - Carbon pricing escalations
+        - Salary impact escalations
         """)
+
         col1, col2 = st.columns(2)
 
         with col1:
-            discount_rate = st.slider("Discount Rate (%)", 1.0, 15.0, 8.0, 0.5) / 100
-            inflation = st.number_input("Expected Annual Inflation (%)", min_value=0.0, max_value=20.0, value=2.0) / 100
+            st.markdown("### Cost Drivers")
+            discount_rate = st.number_input("Annual Discount Rate (%)",
+                                    0.0,
+                                    15.0,
+                                    5.0,
+                                    0.5,
+                                    help="Used to calculate present value of future costs") / 100
 
-            st.markdown("""
-            **What these inputs mean:**
-            - **Discount Rate**: Standard corporate rate is typically 8%
-            - **Inflation**: General price increase expectation
-            """)
+            projection_years = st.number_input("Analysis Timeframe (Years)",
+                                         1,
+                                         30,
+                                         10,
+                                         help="Duration for cost projections")
 
-
-        # Calculate NPV for each scenario
-        scenario_npv_data = []
-        for scenario, rates in scenarios.items():
-            npv = 0
-            for year in range(projection_years):
-                annual_cost = (
-                        total_operational * (1 + rates['operational_increase'])**year +
-                        total_carbon_cost * (1 + rates['carbon_increase'])**year +
-                        total_fuel_cost * (1 + rates['fuel_increase'])**year
-                )
-                npv += annual_cost / (1 + discount_rate)**year
-            scenario_npv_data.append({'Scenario': scenario, 'NPV': round(npv)})
-
+        # Scenario Analysis - Flight Costs Only
         with col2:
-            st.markdown("**Net Present Value (NPV) by Scenario:**")
-            for data in scenario_npv_data:
-                st.metric(
-                    f"{data['Scenario']} NPV",
-                    f"€{data['NPV']:,.0f}",
-                    help=f"Net Present Value using {discount_rate*100:.1f}% discount rate"
-                )
+            st.markdown("### Growth Scenarios")
+            scenario_config = {
+                'Base Case': {'operational': 0.03, 'carbon': 0.05, 'salary': 0.02},
+                'High Growth': {'operational': 0.05, 'carbon': 0.08, 'salary': 0.04},
+                'Low Growth': {'operational': 0.01, 'carbon': 0.03, 'salary': 0.01}
+            }
 
-            # Calculate the range of potential costs
-            npv_values = [d['NPV'] for d in scenario_npv_data]
-            cost_range = max(npv_values) - min(npv_values)
+            selected_scenario = st.radio("Select Cost Growth Scenario",
+                                         list(scenario_config.keys()),
+                                         index=0)
 
-            st.markdown(f"""
-            **What this means for your flight:**
-            - Total cost range: €{cost_range:,.0f} over {projection_years} years
-            - Best case (Low Growth): €{min(npv_values):,.0f}
-            - Worst case (High Growth): €{max(npv_values):,.0f}
-            """)
+        # NPV Calculation (Flight Costs Only)
+        scenario = scenario_config[selected_scenario]
+        npv = 0
+        cost_breakdown = []
 
+
+        for year in range(projection_years):
+            year_cost = (
+                    total_operational * (1 + scenario['operational'])**year +
+                    total_carbon_cost * (1 + scenario['carbon'])**year +
+                    total_flight_salary_impact * (1 + scenario['salary'])**year
+            )
+            present_value = year_cost / (1 + discount_rate)**year
+            npv += present_value
+            cost_breakdown.append((year+1, present_value))
+
+        # Display Results
+        st.markdown(f"## Projected NPV: €{npv:,.0f}")
+        st.subheader(f"Average Annual NPV: €{npv/projection_years:,.0f}")
+
+        # Cost Breakdown Chart
+        years = [f"Year {y}" for y, _ in cost_breakdown]
+        values = [v for _, v in cost_breakdown]
+
+        fig = px.area(
+            x=years,
+            y=values,
+            labels={'x': 'Year', 'y': 'Annual Cost (€)'},
+            title=f"Cost Projection - {selected_scenario} Scenario"
+        )
+        st.plotly_chart(fig)
+
+        st.markdown("""
+        **Key Insights:**
+        - Operational costs (including fuel) typically account for 80-85% of total flight expenses
+        - Carbon costs show highest volatility due to regulatory uncertainty
+        - Salary impacts grow steadily based on organizational policies
+        """)
         st.markdown("---")
         # In the advanced_tab section, update the break-even analysis:
         st.markdown("#### 🎯 Break-Even Analysis")
@@ -1475,28 +1497,6 @@ def display_economic_impacts(result, home_team, away_team,flight_salary_impact, 
         """)
         st.markdown("---")
 
-        # Add sensitivity analysis visualization
-        st.markdown("#### 📉 Sensitivity Analysis")
-
-        # Create sensitivity data
-        sensitivity_data = pd.DataFrame({
-            'Factor': ['Fuel Price', 'Carbon Price', 'Operational Costs'],
-            'Impact': [
-                total_fuel_cost * 0.1,  # 10% change in fuel price
-                total_carbon_cost * 0.1,  # 10% change in carbon price
-                total_operational * 0.1  # 10% change in operational costs
-            ]
-        })
-
-        fig_sensitivity = px.bar(
-            sensitivity_data,
-            x='Factor',
-            y='Impact',
-            title='Cost Sensitivity (Impact of 10% Change)',
-            template='plotly_dark'
-        )
-        st.plotly_chart(fig_sensitivity, use_container_width=True)
-        st.markdown("---")
         # Strategic Recommendations
         st.markdown("### 🚀 Strategic Recommendations")
 
@@ -1521,20 +1521,7 @@ def display_economic_impacts(result, home_team, away_team,flight_salary_impact, 
            - Potential {efficiency_gain*100:.0f}% fuel efficiency improvement with next-generation aircraft
            - ROI analysis suggests prioritizing fleet renewal where possible
         """)
-        # Add impact text at the bottom
-        st.success(f"""
-        **Key Takeaways for Your Flight:**
-        1. **Expected Cost Range**: €{min(npv_values):,.0f} to €{max(npv_values):,.0f} in today's terms
-        2. **Risk Level**: {
-        'High' if cost_range > total_cost * 0.5
-        else 'Medium' if cost_range > total_cost * 0.25
-        else 'Low'
-        } variability in potential costs
-        3. **Recommended Actions**:
-           - Consider {'hedging fuel prices' if cost_range > total_cost * 0.3 else 'fixed price contracts'}
-           - {'Accelerate SAF adoption' if 'break_even_year' in locals() and break_even_year < 5 else 'Monitor SAF prices'}
-           - {'Priority for cost management' if cost_range > total_cost * 0.4 else 'Standard cost monitoring'}
-        """)
+
 def display_carbon_price_analysis(air_emissions, rail_emissions, bus_emissions, away_team, home_team):
     """Display carbon price analysis with proper formatting"""
     st.markdown("### 💰 Carbon Price Analysis")
