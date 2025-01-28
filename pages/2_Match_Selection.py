@@ -553,7 +553,7 @@ def main():
                         'from_analysis': True,
                         'auto_calculate': True  # Add this flag
                     }
-                    st.switch_page("../app.py")
+                    st.switch_page("app.py")
 
 
 if __name__ == "__main__":
