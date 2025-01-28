@@ -20,5 +20,5 @@ if __name__ == "__main__":
 
 
 
-#need breakdown of how each option is calculated
+
 #NPV is wrong
