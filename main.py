@@ -18,7 +18,7 @@ def main():
 if __name__ == "__main__":
     main()
 
-
-
-
-#NPV is wrong
+#work on break even analysis, all SAF and Conventional prices shoud be interlinked.
+#operational costs tab is sloppy
+#carbon costs tab is not need as we have the table
+#visualization should be cleaned up as well

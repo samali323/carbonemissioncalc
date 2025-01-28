@@ -595,7 +595,6 @@ def display_transport_comparison(result):
             <div class="footnotes">
                 {rail_note}<br/>
                 {bus_note}
-            </div>
             """, unsafe_allow_html=True)
 
     return rail_emissions, bus_emissions, flight_salary_impact, rail_salary_impact, bus_salary_impact
@@ -1283,13 +1282,18 @@ def display_economic_impacts(result, home_team, away_team, flight_salary_impact,
 
             with col1:
                 st.markdown("### Cost Drivers")
-                discount_rate = st.slider("Annual Discount Rate (%)",
-                                          1.0, 15.0, 8.0, 0.5,
+                discount_rate = st.number_input("Annual Discount Rate (%)",
+                                                0.0,
+                                                15.0,
+                                                8.0,
+                                                0.5,
                                           help="Used to calculate present value of future costs") / 100
 
-                projection_years = st.slider("Analysis Timeframe (Years)",
-                                             1, 30, 10,
-                                             help="Duration for cost projections")
+                projection_years = st.number_input("Analysis Timeframe (Years)",
+                                                   5,
+                                                   30,
+                                                   10,
+                                           help="Duration for cost projections")
 
             # Scenario Analysis - Flight Costs Only
             with col2:
