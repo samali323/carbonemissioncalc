@@ -3,11 +3,8 @@ import sqlite3
 import numpy as np
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
 import streamlit as st
-from plotly.subplots import make_subplots
-from pygments.lexers import go
-
+import streamlit_nested_layout
 from src.config.constants import SOCIAL_CARBON_COSTS
 from src.data.team_data import get_all_teams, get_team_airport, get_airport_coordinates, TEAM_COUNTRIES
 from src.models.emissions import EmissionsCalculator
@@ -795,63 +792,110 @@ def display_economic_impacts(result, home_team, away_team,flight_salary_impact, 
         return table_html % (header_cols, data_rows)
 
     with summary_tab:
-        st.markdown("### Economic Impact Summary")
-
-        # Economic Impact Table
-        headers = ["Cost Category", "Amount (€)"]
-        data = [
-            ["Operational Costs", format_currency(total_operational)],
-            ["Environmental Impact", format_currency(total_environmental)],
-            ["Salary Impact", format_currency(total_flight_salary_impact)],
-            ["Total Cost", format_currency(total_cost)]
-        ]
-        st.markdown(create_centered_table(headers, data), unsafe_allow_html=True)
+        with st.expander("Flight Impact Summary", ):
+            # Economic Impact Table
+            headers = ["Cost Category", "Amount (€)"]
+            data = [
+                ["Operational Costs", format_currency(total_operational)],
+                ["Environmental Impact", format_currency(total_environmental)],
+                ["Salary Impact", format_currency(total_flight_salary_impact)],
+                ["Total Cost", format_currency(total_cost)]
+            ]
+            st.markdown(create_centered_table(headers, data), unsafe_allow_html=True)
 
         # Potential Cost Savings
-        st.markdown("### Potential Cost Savings")
-        savings_data = []
-        for option, costs in alternatives.items():
-            total_alt_operational = costs['operational']
-            total_alt_carbon = costs['carbon']
-            total_alt_social = costs['social']
-            alt_salary_impact = costs['salary'] if costs['salary'] is not None else 0
+        with st.expander("### Potential Cost Savings"):
+            savings_data = []
+            for option, costs in alternatives.items():
+                total_alt_operational = costs['operational']
+                total_alt_carbon = costs['carbon']
+                total_alt_social = costs['social']
+                alt_salary_impact = costs['salary'] if costs['salary'] is not None else 0
 
-            total_alt_cost = total_alt_operational + total_alt_carbon + total_alt_social + alt_salary_impact
-            savings = total_cost - total_alt_cost
-            savings_percent = (savings / total_cost) * 100
+                total_alt_cost = total_alt_operational + total_alt_carbon + total_alt_social + alt_salary_impact
+                savings = total_cost - total_alt_cost
+                savings_percent = (savings / total_cost) * 100
 
-            savings_display = f"Savings: {format_currency(savings)}" if savings >= 0 else f"Additional Cost: {format_currency(abs(savings))}"
-            savings_percent_display = f"{savings_percent:.1f}%" if savings >= 0 else f"{abs(savings_percent):.1f}%"
+                savings_display = f"Savings: {format_currency(savings)}" if savings >= 0 else f"Additional Cost: {format_currency(abs(savings))}"
+                savings_percent_display = f"{savings_percent:.1f}%" if savings >= 0 else f"{abs(savings_percent):.1f}%"
 
-            savings_data.append([
-                option.replace('_', ' ').title(),
-                format_currency(total_alt_cost),
-                savings_display,
-                savings_percent_display
-            ])
+                savings_data.append([
+                    option.replace('_', ' ').title(),
+                    format_currency(total_alt_cost),
+                    savings_display,
+                    savings_percent_display
+                ])
 
-        headers = ["Option", "Total Cost", "Financial Impact", "Impact %"]
-        st.markdown(create_centered_table(headers, savings_data), unsafe_allow_html=True)
+            headers = ["Option", "Total Cost", "Financial Impact", "Impact %"]
+            st.markdown(create_centered_table(headers, savings_data), unsafe_allow_html=True)
 
 
         # Environmental Impact Table
         if rail_emissions and bus_emissions:
-            st.markdown("### Environmental Impact Reduction")
-            headers = ["Transport Mode", "CO₂ Emissions (tons)", "Reduction %"]
-            data = [
-                ["Air", f"{result.total_emissions:,.2f}", "0.0%"],
-                ["Rail", f"{rail_emissions:,.2f}", f"{((result.total_emissions - rail_emissions)/result.total_emissions*100):.1f}%"],
-                ["Bus", f"{bus_emissions:,.2f}", f"{((result.total_emissions - bus_emissions)/result.total_emissions*100):.1f}%"]
-            ]
-            st.markdown(create_centered_table(headers, data), unsafe_allow_html=True)
+            with st.expander("### Environmental Impact Reduction"):
+                headers = ["Transport Mode", "CO₂ Emissions (tons)", "Reduction %"]
+                data = [
+                    ["Air", f"{result.total_emissions:,.2f}", "0.0%"],
+                    ["Rail", f"{rail_emissions:,.2f}", f"{((result.total_emissions - rail_emissions)/result.total_emissions*100):.1f}%"],
+                    ["Bus", f"{bus_emissions:,.2f}", f"{((result.total_emissions - bus_emissions)/result.total_emissions*100):.1f}%"]
+                ]
+                st.markdown(create_centered_table(headers, data), unsafe_allow_html=True)
+
+        with st.expander("Cost Breakdown for Alternative Methods"):
+            # Create headers and data for detailed breakdown
+            breakdown_headers = ["Option", "Operational Cost", "Carbon Cost", "Social Cost", "Salary Impact", "Total Cost"]
+            breakdown_data = []
+
+            for option, costs in alternatives.items():
+                total_alt_operational = costs['operational']
+                total_alt_carbon = costs['carbon']
+                total_alt_social = costs['social']
+                alt_salary_impact = costs['salary'] if costs['salary'] is not None else 0
+                total_alt_cost = total_alt_operational + total_alt_carbon + total_alt_social + alt_salary_impact
+
+                breakdown_data.append([
+                    option.replace('_', ' ').title(),
+                    format_currency(total_alt_operational),
+                    format_currency(total_alt_carbon),
+                    format_currency(total_alt_social),
+                    format_currency(alt_salary_impact),
+                    format_currency(total_alt_cost)
+                ])
+
+            # Render the table
+            st.markdown(create_centered_table(breakdown_headers, breakdown_data), unsafe_allow_html=True)
+
 
         # Footnotes
         st.markdown("---")
         st.markdown("""
         **Footnotes:**
-        - *Empty Leg Flight*: 75% discount on operational costs as aircraft would fly empty otherwise
-        - *Regional Airport Option*: 30% reduction in landing fees using smaller airports
-        - *Bulk Rate Booking*: 15% discount through seasonal booking arrangements
+         **Cost Reduction Options:**
+        1. **Empty Leg Flight (Discounted Return)** 
+           - Book a private aircraft that needs to return to its base
+           - Significant discount but limited schedule flexibility
+           - Same comfort and speed as regular charter
+        
+        2. **Regional Airport Option**
+           - Use smaller airports with lower landing fees
+           - 30% reduction in airport costs
+           - May require longer ground transport time
+        
+        3. **Bulk Booking Discount**
+           - Pre-book multiple flights for the season
+           - 15% discount on total costs
+           - Requires advance planning
+        
+        4. **Split Charter (Shared Flight)**
+           - Share aircraft with another team
+           - Split total costs 50/50
+           - Requires schedule coordination
+        
+        **Alternative Transport Options:**
+        - **Rail Transport**: Lower emissions but longer journey time
+        - **Bus Transport**: Most economical but longest travel time
+        
+        💡 **Recommendation:** Consider your priorities (cost vs. time vs. flexibility) when choosing an option.
         """, unsafe_allow_html=True)
 
     with ops_tab:
