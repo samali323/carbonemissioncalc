@@ -884,7 +884,7 @@ def display_economic_impacts(result, home_team, away_team, flight_salary_impact,
             )
 
         # Potential Cost Savings
-        with st.expander("### Potential Cost Savings"):
+        with st.markdown("### Potential Cost Savings"):
             savings_data = []
             for option, costs in alternatives.items():
                 total_alt_operational = costs['operational']
@@ -922,7 +922,7 @@ def display_economic_impacts(result, home_team, away_team, flight_salary_impact,
                 ]
                 st.markdown(create_centered_table(headers, data), unsafe_allow_html=True)
 
-        with st.expander("Cost Breakdown for Alternative Methods"):
+        with st.markdown("Cost Breakdown for Alternative Methods"):
             # Create headers and data for detailed breakdown
             breakdown_headers = ["Option", "Operational Cost", "Carbon Cost", "Social Cost", "Salary Impact",
                                  "Total Cost"]
@@ -1344,7 +1344,7 @@ def display_economic_impacts(result, home_team, away_team, flight_salary_impact,
         """)
 
         # Time Value of Money Section
-        with st.expander("#### 💰 Cost Projection Analysis"):
+        with st.markdown("#### 💰 Cost Projection Analysis"):
             st.markdown("""
             **Key Financial Concepts:**
             - Future costs discounted to present value
@@ -1431,7 +1431,7 @@ def display_economic_impacts(result, home_team, away_team, flight_salary_impact,
 
         st.markdown("---")
         # In the advanced_tab section, update the break-even analysis:
-        with st.expander("#### 🎯 Break-Even Analysis"):
+        with st.markdown("#### 🎯 Break-Even Analysis"):
             st.markdown("""
                 **Understanding Break-Even Analysis:**
                 This shows when Sustainable Aviation Fuel (SAF) becomes cost-competitive with conventional fuel, 
@@ -1546,7 +1546,7 @@ def display_economic_impacts(result, home_team, away_team, flight_salary_impact,
                 """)
         st.markdown("---")
         # Monte Carlo Simulation
-        with st.expander("#### 🎲 Monte Carlo Simulation"):
+        with st.markdown("#### 🎲 Monte Carlo Simulation"):
 
             n_simulations = 1000
 
