@@ -1481,7 +1481,7 @@ def display_economic_impacts(result, home_team, away_team,flight_salary_impact, 
         # Create histogram using plotly
         fig_monte_carlo = px.histogram(
             simulation_results,
-            nbins=30,
+            nbins=50,
             title='Cost Distribution (Monte Carlo Simulation)',
             labels={'value': 'Total Cost (€)', 'count': 'Frequency'},
             template='plotly_dark'
