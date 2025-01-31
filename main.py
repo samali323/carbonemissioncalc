@@ -18,7 +18,6 @@ def main():
 if __name__ == "__main__":
     main()
 
-#work on break even analysis, all SAF and Conventional prices shoud be interlinked.
-#operational costs tab is sloppy
-#carbon costs tab is not need as we have the table
-#visualization should be cleaned up as well
+#two calculate flight time calculations??
+#salaries by competition and highest in each competition
+#write code to figure out how to get total costs for each method.

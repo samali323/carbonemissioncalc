@@ -76,42 +76,6 @@ class EmissionsProcessor:
         conn.commit()
         conn.close()
 
-    def calculate_flight_time(self, distance_km: float, is_minutes: bool = True) -> Union[str, int]:
-        """Calculate flight time"""
-        # Parameters
-        CRUISE_SPEED = 800  # km/h
-        CLIMB_SPEED = 550   # km/h
-        TAXI_TIME = 0.5     # hours
-        BOARDING_TIME = 0.5 # hours
-        CLIMB_DISTANCE = 150 # km
-        MIN_TIME = 0.5      # hours
-
-        # Calculate cruise and climb times
-        cruise_distance = max(0, distance_km - (CLIMB_DISTANCE * 2))
-        cruise_time = cruise_distance / CRUISE_SPEED
-        climb_time = (min(distance_km, CLIMB_DISTANCE * 2)) / CLIMB_SPEED
-
-        # Adjust taxi and boarding times for short flights
-        if distance_km < 500:
-            boarding_factor = 0.75
-            taxi_factor = 0.75
-        else:
-            boarding_factor = 1.0
-            taxi_factor = 1.0
-
-        # Calculate total time
-        total_time = (cruise_time + climb_time +
-                      TAXI_TIME * taxi_factor +
-                      BOARDING_TIME * boarding_factor)
-
-        total_time = max(total_time, MIN_TIME)
-
-        if is_minutes:
-            return int(total_time * 60)
-
-        hours = int(total_time)
-        minutes = int((total_time % 1) * 60)
-        return f"{hours}h {minutes}m"
 
     def calculate_match_emissions(self, route_data, passengers=30):
         """Calculate emissions using existing route data"""
