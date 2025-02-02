@@ -1,222 +1,194 @@
 import sqlite3
 import pandas as pd
-from src.utils.calculations import calculate_transport_emissions, calculate_flight_time
-from src.data.team_data import get_team_airport, get_airport_coordinates, TEAM_COUNTRIES
-from src.utils.carbon_pricing.enhanced_calculator import EnhancedCarbonPricingCalculator
-from src.models.emissions import EmissionsCalculator
+from typing import Dict, List, Tuple
+from dataclasses import dataclass
 
-def get_salary_info(conn, team, competition):
-    cursor = conn.cursor()
-    cursor.execute("""
-       SELECT gross_per_minute
-       FROM team_salaries 
-       WHERE team = ? AND competition = ?
-       ORDER BY last_updated DESC 
-       LIMIT 1
-   """, (team, competition))
-    result = cursor.fetchone()
-    return result[0] if result else 0
+@dataclass
+class RouteAnalysis:
+    home_team: str
+    away_team: str
+    distance_km: float
+    air_time: int  # minutes
+    rail_time: int  # minutes
+    bus_time: int  # minutes
+    air_emissions: float  # tons CO2
+    rail_emissions: float  # tons CO2
+    bus_emissions: float  # tons CO2
+    salary_cost_air: float  # EUR
+    salary_cost_rail: float  # EUR
+    salary_cost_bus: float  # EUR
 
-def analyze_transport_costs(db_path='data/routes.db'):
-    conn = sqlite3.connect(db_path)
-    calculator = EmissionsCalculator()
-    carbon_calc = EnhancedCarbonPricingCalculator()
+class ModeShiftAnalyzer:
+    def __init__(self, db_path: str = 'data/routes.db', min_distance: float = 50.0):
+        self.db_path = db_path
+        self.min_distance = min_distance  # Minimum distance in kilometers
+        self.routes_data = []
+        self.salary_data = {}
+        self._load_data()
 
-    savings_found = []
-    time_savings_found = []
+    def _load_data(self):
+        """Load route and salary data from database."""
+        with sqlite3.connect(self.db_path) as conn:
+            # Load routes, filtering by minimum distance
+            routes_query = """
+                SELECT 
+                    home_team,
+                    away_team,
+                    driving_duration,
+                    transit_duration,
+                    driving_distance/1000.0 as driving_km,
+                    transit_distance/1000.0 as transit_km,
+                    competition
+                FROM routes
+                WHERE driving_distance/1000.0 >= ?
+            """
+            self.routes_df = pd.read_sql_query(routes_query, conn, params=(self.min_distance,))
 
-    # Get routes with competition data
-    cursor = conn.cursor()
-    cursor.execute("""
-       SELECT r.home_team, r.away_team, m.Competition,
-              r.driving_duration, r.transit_duration,
-              r.driving_distance/1000.0 as driving_km,
-              r.transit_distance/1000.0 as transit_km
-       FROM routes r
-       JOIN matches m ON r.home_team = m."Home Team" 
-                     AND r.away_team = m."Away Team"
-   """)
-    routes = cursor.fetchall()
+            # Load salary data
+            salary_query = """
+                SELECT team, gross_per_minute, competition
+                FROM team_salaries
+            """
+            self.salary_df = pd.read_sql_query(salary_query, conn)
 
-    print("Analyzing transport costs and times for all routes...")
-    print("-" * 80)
+            # Group salary by team with median per-minute rate
+            self.salary_data = (
+                self.salary_df.groupby('team')['gross_per_minute']
+                .median()
+                .to_dict()
+            )
 
-    for route in routes:
-        home_team = route[0]
-        away_team = route[1]
-        competition = route[2]
-        driving_duration = route[3]
-        transit_duration = route[4]
-        driving_km = route[5]
-        transit_km = route[6]
+    def calculate_time_cost(self, minutes: int, team: str) -> float:
+        """Calculate salary cost for time duration."""
+        per_minute_rate = self.salary_data.get(team, 0)
+        return minutes * per_minute_rate
 
-        # Get airports and coordinates
-        home_airport = get_team_airport(home_team)
-        away_airport = get_team_airport(away_team)
+    def analyze_route(self, row) -> RouteAnalysis:
+        """Analyze a single route for mode shift potential."""
+        # Validate row has sufficient distance
+        if row['driving_km'] < self.min_distance:
+            return None
 
-        if not home_airport or not away_airport:
-            continue
+        # Calculate approximate times and emissions
+        air_time = 30 + (row['driving_km'] / 8)  # Approx 800 km/h + 30 min ground ops
+        rail_time = row['transit_duration'] / 60 if pd.notna(row['transit_duration']) else None
+        bus_time = row['driving_duration'] / 60 if pd.notna(row['driving_duration']) else None
 
-        home_coords = get_airport_coordinates(home_airport)
-        away_coords = get_airport_coordinates(away_airport)
+        # Air emissions (approximate using ICAO formula)
+        air_emissions = row['driving_km'] * 0.15  # ~150g CO2 per km
+        rail_emissions = row['transit_km'] * 0.04 if pd.notna(row['transit_km']) else None
+        bus_emissions = row['driving_km'] * 0.03 if pd.notna(row['driving_km']) else None
 
-        if not home_coords or not away_coords:
-            continue
-
-        # Calculate base flight costs
-        result = calculator.calculate_flight_emissions(
-            home_coords['lat'], home_coords['lon'],
-            away_coords['lat'], away_coords['lon'],
-            passengers=30,
-            is_round_trip=False
+        # Calculate combined team salary costs
+        combined_rate = (
+                self.salary_data.get(row['home_team'], 0) +
+                self.salary_data.get(row['away_team'], 0)
         )
 
-        # Calculate travel times
-        flight_time = calculate_flight_time(result.distance_km) # in seconds
+        salary_cost_air = air_time * combined_rate
+        salary_cost_rail = rail_time * combined_rate if rail_time else None
+        salary_cost_bus = bus_time * combined_rate if bus_time else None
 
-        # Calculate time differences
-        rail_time_saved = (flight_time - transit_duration) / 3600 if transit_duration else None
-        bus_time_saved = (flight_time - driving_duration) / 3600 if driving_duration else None
+        return RouteAnalysis(
+            home_team=row['home_team'],
+            away_team=row['away_team'],
+            distance_km=row['driving_km'],
+            air_time=air_time,
+            rail_time=rail_time,
+            bus_time=bus_time,
+            air_emissions=air_emissions,
+            rail_emissions=rail_emissions,
+            bus_emissions=bus_emissions,
+            salary_cost_air=salary_cost_air,
+            salary_cost_rail=salary_cost_rail,
+            salary_cost_bus=salary_cost_bus
+        )
 
-        # Get salary costs per minute
-        salary_per_minute = get_salary_info(conn, home_team, competition)
+    def analyze_all_routes(self) -> Dict:
+        """Analyze all routes and generate summary statistics."""
+        results = []
+        for _, row in self.routes_df.iterrows():
+            analysis = self.analyze_route(row)
+            if analysis:
+                results.append(analysis)
 
-        # Calculate salary impacts
-        flight_salary = (flight_time / 60) * salary_per_minute * 30  # 30 players
-        rail_salary = (transit_duration / 60) * salary_per_minute * 30 if transit_duration else None
-        bus_salary = (driving_duration / 60) * salary_per_minute * 30 if driving_duration else None
+        summary = {
+            'total_routes': len(results),
+            'rail_viable': len([r for r in results
+                                if (r.rail_time is not None and
+                                    r.rail_time < r.air_time and
+                                    r.salary_cost_rail is not None and
+                                    r.salary_cost_rail < r.salary_cost_air)]),
+            'bus_viable': len([r for r in results
+                               if (r.bus_time is not None and
+                                   r.bus_time < r.air_time and
+                                   r.salary_cost_bus is not None and
+                                   r.salary_cost_bus < r.salary_cost_air)]),
+            'total_air_emissions': sum(r.air_emissions for r in results),
+            'potential_rail_savings': sum(
+                r.air_emissions - r.rail_emissions
+                for r in results if r.rail_emissions is not None
+            ),
+            'potential_bus_savings': sum(
+                r.air_emissions - r.bus_emissions
+                for r in results if r.bus_emissions is not None
+            ),
+            'detailed_routes': results
+        }
 
-        # Calculate alternative transport emissions
-        rail_emissions = calculate_transport_emissions('rail', transit_km, 30, False)
-        bus_emissions = calculate_transport_emissions('bus', driving_km, 30, False)
+        return summary
 
-        # Operational costs
-        flight_operational = 25000 * (result.distance_km/800)  # €25k per hour at 800km/h
-        rail_operational = flight_operational * 0.3  # 30% of flight cost
-        bus_operational = flight_operational * 0.2  # 20% of flight cost
+    def generate_report(self):
+        """Generate a detailed report of mode shift analysis."""
+        summary = self.analyze_all_routes()
 
-        # Carbon costs
-        carbon_price = carbon_calc.EU_ETS_PRICE
-        flight_carbon = result.total_emissions * carbon_price
-        rail_carbon = rail_emissions * carbon_price if rail_emissions else 0
-        bus_carbon = bus_emissions * carbon_price if bus_emissions else 0
+        print("\nMode Shift Analysis Report")
+        print("=" * 80)
+        print(f"Minimum Route Distance: {self.min_distance} km")
+        print(f"Total Routes Analyzed: {summary['total_routes']}")
+        print(f"Rail-Viable Routes: {summary['rail_viable']} "
+              f"({summary['rail_viable']/summary['total_routes']*100:.1f}%)")
+        print(f"Bus-Viable Routes: {summary['bus_viable']} "
+              f"({summary['bus_viable']/summary['total_routes']*100:.1f}%)")
+        print("\nEmissions Impact")
+        print("-" * 40)
+        print(f"Current Air Emissions: {summary['total_air_emissions']:.1f} tons CO2")
+        print(f"Potential Rail Savings: {summary['potential_rail_savings']:.1f} tons CO2")
+        print(f"Potential Bus Savings: {summary['potential_bus_savings']:.1f} tons CO2")
 
-        # Total costs including salary impact
-        flight_total = flight_operational + flight_carbon + flight_salary
-        rail_total = rail_operational + rail_carbon + rail_salary if rail_salary else float('inf')
-        bus_total = bus_operational + bus_carbon + bus_salary if bus_salary else float('inf')
+        # Export detailed results
+        results_list = []
+        for r in summary['detailed_routes']:
+            data = vars(r)
+            data['rail_viable'] = bool(
+                r.rail_time is not None and
+                r.rail_time < r.air_time and
+                r.salary_cost_rail is not None and
+                r.salary_cost_rail < r.salary_cost_air
+            )
+            data['bus_viable'] = bool(
+                r.bus_time is not None and
+                r.bus_time < r.air_time and
+                r.salary_cost_bus is not None and
+                r.salary_cost_bus < r.salary_cost_air
+            )
+            data['time_difference_rail'] = (r.rail_time - r.air_time) if r.rail_time is not None else None
+            data['time_difference_bus'] = (r.bus_time - r.air_time) if r.bus_time is not None else None
+            results_list.append(data)
 
-        # Check for cost or time savings
-        if (rail_total < flight_total or bus_total < flight_total or
-                (rail_time_saved and rail_time_saved > 0) or
-                (bus_time_saved and bus_time_saved > 0)):
+        detailed_df = pd.DataFrame(results_list)
+        detailed_df.to_csv('mode_shift_analysis.csv', index=False)
+        print("\nDetailed analysis exported to mode_shift_analysis.csv")
 
-            savings_found.append({
-                'route': f"{home_team} vs {away_team}",
-                'competition': competition,
-                'distance_km': result.distance_km,
-                'flight_cost': {
-                    'operational': flight_operational,
-                    'carbon': flight_carbon,
-                    'salary': flight_salary,
-                    'total': flight_total
-                },
-                'rail_cost': {
-                    'operational': rail_operational,
-                    'carbon': rail_carbon,
-                    'salary': rail_salary,
-                    'total': rail_total
-                },
-                'bus_cost': {
-                    'operational': bus_operational,
-                    'carbon': bus_carbon,
-                    'salary': bus_salary,
-                    'total': bus_total
-                },
-                'rail_savings': flight_total - rail_total if rail_total < flight_total else 0,
-                'bus_savings': flight_total - bus_total if bus_total < flight_total else 0,
-                'time_savings': {
-                    'flight_time': flight_time / 3600,  # Convert to hours
-                    'rail_time': transit_duration / 3600 if transit_duration else None,
-                    'bus_time': driving_duration / 3600 if driving_duration else None,
-                    'rail_time_saved': rail_time_saved,
-                    'bus_time_saved': bus_time_saved
-                }
-            })
+if __name__ == '__main__':
+    # Allow configurable minimum distance via command-line argument or default to 50 km
+    import sys
+    min_distance = 50.0
+    if len(sys.argv) > 1:
+        try:
+            min_distance = float(sys.argv[1])
+        except ValueError:
+            print("Invalid distance. Using default 50 km.")
 
-    if savings_found:
-        print(f"\nFound {len(savings_found)} routes with potential savings or time benefits:\n")
-        for route in savings_found:
-            print(f"Route: {route['route']}")
-            print(f"Competition: {route['competition']}")
-            print(f"Distance: {route['distance_km']:.1f} km")
-
-            print("\nTravel Times:")
-            times = route['time_savings']
-            print(f"  Flight: {times['flight_time']:.1f} hours")
-
-            if times['rail_time']:
-                time_diff = times['rail_time_saved']
-                print(f"  Rail: {times['rail_time']:.1f} hours")
-                print(f"  Time Impact: {abs(time_diff):.1f} hours {'saved' if time_diff > 0 else 'longer'}")
-
-            if times['bus_time']:
-                time_diff = times['bus_time_saved']
-                print(f"  Bus: {times['bus_time']:.1f} hours")
-                print(f"  Time Impact: {abs(time_diff):.1f} hours {'saved' if time_diff > 0 else 'longer'}")
-
-            print("\nFlight Costs:")
-            print(f"  Operational: €{route['flight_cost']['operational']:,.2f}")
-            print(f"  Carbon: €{route['flight_cost']['carbon']:,.2f}")
-            print(f"  Salary Impact: €{route['flight_cost']['salary']:,.2f}")
-            print(f"  Total: €{route['flight_cost']['total']:,.2f}")
-
-            if route['rail_savings'] > 0:
-                print("\nRail Costs:")
-                print(f"  Operational: €{route['rail_cost']['operational']:,.2f}")
-                print(f"  Carbon: €{route['rail_cost']['carbon']:,.2f}")
-                print(f"  Salary Impact: €{route['rail_cost']['salary']:,.2f}")
-                print(f"  Total: €{route['rail_cost']['total']:,.2f}")
-                print(f"  Potential Savings: €{route['rail_savings']:,.2f}")
-
-            if route['bus_savings'] > 0:
-                print("\nBus Costs:")
-                print(f"  Operational: €{route['bus_cost']['operational']:,.2f}")
-                print(f"  Carbon: €{route['bus_cost']['carbon']:,.2f}")
-                print(f"  Salary Impact: €{route['bus_cost']['salary']:,.2f}")
-                print(f"  Total: €{route['bus_cost']['total']:,.2f}")
-                print(f"  Potential Savings: €{route['bus_savings']:,.2f}")
-
-            print("-" * 80)
-
-        # Summary statistics
-        print("\nSummary Statistics:")
-        print(f"Total Routes Analyzed: {len(routes)}")
-        print(f"Routes with Cost/Time Benefits: {len(savings_found)}")
-
-        total_rail_savings = sum(route['rail_savings'] for route in savings_found)
-        total_bus_savings = sum(route['bus_savings'] for route in savings_found)
-
-        print(f"Total Potential Rail Cost Savings: €{total_rail_savings:,.2f}")
-        print(f"Total Potential Bus Cost Savings: €{total_bus_savings:,.2f}")
-
-        rail_time_savings = [r['time_savings']['rail_time_saved'] for r in savings_found
-                             if r['time_savings']['rail_time_saved'] and r['time_savings']['rail_time_saved'] > 0]
-        bus_time_savings = [r['time_savings']['bus_time_saved'] for r in savings_found
-                            if r['time_savings']['bus_time_saved'] and r['time_savings']['bus_time_saved'] > 0]
-
-        if rail_time_savings:
-            print(f"Routes with Rail Time Savings: {len(rail_time_savings)}")
-            print(f"Average Rail Time Saved: {sum(rail_time_savings)/len(rail_time_savings):.1f} hours")
-
-        if bus_time_savings:
-            print(f"Routes with Bus Time Savings: {len(bus_time_savings)}")
-            print(f"Average Bus Time Saved: {sum(bus_time_savings)/len(bus_time_savings):.1f} hours")
-
-    else:
-        print("\nNo routes found where rail or bus transport shows cost or time benefits.")
-
-    conn.close()
-
-if __name__ == "__main__":
-    analyze_transport_costs()
+    analyzer = ModeShiftAnalyzer(min_distance=min_distance)
+    analyzer.generate_report()
